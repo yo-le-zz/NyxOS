@@ -131,4 +131,31 @@ function nyxlib.formatSize(bytes)
     return string.format("%.1f%s", bytes, units[i])
 end
 
+-- Charge Basalt depuis plusieurs emplacements possibles (installe,
+-- disquette data/, ou repli relatif).
+function nyxlib.loadBasalt(extraPaths)
+    local paths = {}
+    if extraPaths then
+        for _, p in ipairs(extraPaths) do
+            table.insert(paths, p)
+        end
+    end
+    table.insert(paths, "/lib/basalt.lua")
+    table.insert(paths, "data/lib/basalt.lua")
+    table.insert(paths, "disk/data/lib/basalt.lua")
+    for _, path in ipairs(paths) do
+        if fs.exists(path) then
+            local ok, mod = pcall(dofile, path)
+            if ok and type(mod) == "table" and mod.getMainFrame then
+                return mod
+            end
+        end
+    end
+    return nil
+end
+
+function nyxlib.isInstalled()
+    return fs.exists("/etc/nyx-release") or fs.exists("/startup.lua")
+end
+
 return nyxlib

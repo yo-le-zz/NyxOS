@@ -18,14 +18,7 @@ local login = {}
 local palette = colors or colours
 
 local function loadBasalt()
-    if not fs.exists("/lib/basalt.lua") then
-        return nil
-    end
-    local ok, mod = pcall(dofile, "/lib/basalt.lua")
-    if ok and mod then
-        return mod
-    end
-    return nil
+    return nyxlib.loadBasalt()
 end
 
 ------------------------------------------------------------------

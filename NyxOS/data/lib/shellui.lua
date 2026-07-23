@@ -11,14 +11,8 @@ local shellui = {}
 local palette = colors or colours
 
 local function loadBasalt()
-    if not fs.exists("/lib/basalt.lua") then
-        return nil
-    end
-    local ok, mod = pcall(dofile, "/lib/basalt.lua")
-    if ok and mod then
-        return mod
-    end
-    return nil
+    local nyxlib = dofile("/lib/nyxlib.lua")
+    return nyxlib.loadBasalt()
 end
 
 -- Capture la sortie d'une commande et la renvoie sous forme de string

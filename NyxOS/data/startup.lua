@@ -56,15 +56,13 @@ if fs.exists("/etc/motd") then
     f.close()
 end
 
--- Lancer le shell graphique avec Basalt
+-- Lancer le shell graphique avec Basalt (repli texte si indisponible)
 local shelluiOk, shellui = pcall(dofile, "/lib/shellui.lua")
 if shelluiOk and shellui then
-    local success = pcall(shellui.run)
-    if not success then
-        -- Fallback sur le shell texte si le shell graphique échoue
+    local runOk, success = pcall(shellui.run)
+    if not runOk or success == false then
         shellui.runTextFallback()
     end
 else
-    -- Si shellui.lua n'existe pas, lancer le shell standard
     shell.run("/bin/shell")
 end
