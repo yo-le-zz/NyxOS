@@ -31,6 +31,12 @@ copyDir(
     LIB_DIR
 )
 
+-- Installation du programme principal
+fs.copy(
+    fs.combine(baseDir, "main.lua"),
+    LIB_DIR .. "/main.lua"
+)
+
 
 -- Configuration
 if not fs.exists(ETC_DIR) then
@@ -56,7 +62,7 @@ end
 local launcher = fs.open("cct-client.lua", "w")
 
 launcher.write([[
-shell.run("/lib/cctchat/main.lua", ...)
+shell.run("/lib/cctchat/cct-client.lua", ...)
 ]])
 
 launcher.close()
