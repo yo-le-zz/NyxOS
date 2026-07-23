@@ -33,8 +33,8 @@ copyDir(
 
 -- Installation du programme principal
 fs.copy(
-    fs.combine(baseDir, "main.lua"),
-    LIB_DIR .. "/main.lua"
+    fs.combine(baseDir, "cct-client.lua"),
+    LIB_DIR .. "/cct-client.lua"
 )
 
 
