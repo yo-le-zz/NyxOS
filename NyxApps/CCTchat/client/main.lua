@@ -1,7 +1,6 @@
 -- CCTchat - Client principal
-local dir = fs.getDir(shell.getRunningProgram())
-local net = dofile(fs.combine(dir, "libs/net.lua"))
-local ui  = dofile(fs.combine(dir, "libs/ui.lua"))
+local net = dofile("/lib/cctchat/net.lua")
+local ui = dofile("/lib/cctchat/ui.lua")
 
 local PROTOCOL = "cctchat"
 net.open()

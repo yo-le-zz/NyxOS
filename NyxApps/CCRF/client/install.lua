@@ -8,7 +8,7 @@ local function here()
 end
 
 local base = here()
-local DEST = "/ccrf_data"
+local DEST = "/etc/ccrf"
 
 local function ensureDir(path)
     if not fs.exists(path) then
@@ -78,7 +78,7 @@ local launcherCode = 'local args = { ... }\n'
     .. '    shell.run("' .. DEST .. '/reset.lua", ...)\n'
     .. 'end\n'
 
-local f = fs.open("/ccrf", "w")
+local f = fs.open("ccrf.lua", "w")
 f.write(launcherCode)
 f.close()
 

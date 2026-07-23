@@ -1,42 +1,66 @@
--- CCTchat Client - Installateur
 local baseDir = fs.getDir(shell.getRunningProgram())
-local installDir = "/cctchat-client"
+
+local LIB_DIR = "/lib/cctchat"
+local ETC_DIR = "/etc/cctchat"
+
 
 local function copyDir(src, dst)
-    if not fs.exists(dst) then fs.makeDir(dst) end
+    if not fs.exists(dst) then
+        fs.makeDir(dst)
+    end
+
     for _, name in ipairs(fs.list(src)) do
-        local s = fs.combine(src, name)
-        local d = fs.combine(dst, name)
-        if fs.isDir(s) then
-            copyDir(s, d)
-        elseif not fs.exists(d) then
-            fs.copy(s, d)
+        local srcPath = fs.combine(src, name)
+        local dstPath = fs.combine(dst, name)
+
+        if fs.isDir(srcPath) then
+            copyDir(srcPath, dstPath)
+        else
+            fs.copy(srcPath, dstPath)
         end
     end
 end
 
-term.clear()
-term.setCursorPos(1, 1)
-term.setTextColor(colors.lime)
-print("=========================================")
-print("   Installation de CCTchat - Client")
-print("=========================================")
-term.setTextColor(colors.white)
 
-if not fs.exists(installDir) then
-    fs.makeDir(installDir)
+print("Installation de CCTchat Client...")
+
+
+-- Installation des libs
+copyDir(
+    fs.combine(baseDir, "libs"),
+    LIB_DIR
+)
+
+
+-- Configuration
+if not fs.exists(ETC_DIR) then
+    fs.makeDir(ETC_DIR)
 end
 
-copyDir(fs.combine(baseDir, "libs"), fs.combine(installDir, "libs"))
-copyDir(fs.combine(baseDir, "data"), fs.combine(installDir, "data"))
-fs.copy(fs.combine(baseDir, "main.lua"), fs.combine(installDir, "main.lua"))
 
-local f = fs.open("/cct-client", "w")
-f.write('shell.run("' .. installDir .. '/main.lua")\n')
-f.close()
+if not fs.exists(ETC_DIR .. "/config.lua") then
+    local f = fs.open(ETC_DIR .. "/config.lua", "w")
 
-term.setTextColor(colors.lime)
-print("")
-print("Installation terminee !")
-term.setTextColor(colors.white)
-print("Tapez 'cct-client' depuis n'importe quel dossier pour lancer le chat.")
+    f.write([[
+return {
+    server = nil,
+    username = nil
+}
+]])
+
+    f.close()
+end
+
+
+-- Création commande NyxOS
+local launcher = fs.open("cct-client.lua", "w")
+
+launcher.write([[
+shell.run("/lib/cctchat/main.lua", ...)
+]])
+
+launcher.close()
+
+
+print("CCTchat Client installé.")
+print("Commande : cct-client")
