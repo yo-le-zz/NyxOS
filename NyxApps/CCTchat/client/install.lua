@@ -25,9 +25,9 @@ end
 print("Installation de CCTchat Client...")
 
 
--- Installation des libs
+-- Installation des lib
 copyDir(
-    fs.combine(baseDir, "libs"),
+    fs.combine(baseDir, "lib"),
     LIB_DIR
 )
 

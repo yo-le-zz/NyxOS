@@ -1,8 +1,8 @@
 -- CCTchat - Serveur principal
 local dir = fs.getDir(shell.getRunningProgram())
-local hash = dofile(fs.combine(dir, "libs/hash.lua"))
-local db   = dofile(fs.combine(dir, "libs/db.lua"))
-local net  = dofile(fs.combine(dir, "libs/net.lua"))
+local hash = dofile(fs.combine(dir, "lib/hash.lua"))
+local db   = dofile(fs.combine(dir, "lib/db.lua"))
+local net  = dofile(fs.combine(dir, "lib/net.lua"))
 
 local PROTOCOL = "cctchat"
 local CONFIG_PATH = fs.combine(dir, "data/server.cfg")

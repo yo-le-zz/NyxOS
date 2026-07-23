@@ -1,1 +1,1 @@
-shell.run("server.lua")
+shell.run("main.lua")

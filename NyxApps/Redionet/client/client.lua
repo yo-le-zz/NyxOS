@@ -11,9 +11,9 @@ SERVER_ID = nil     -- set in setup_server_connection
 CLIENT_ID = os.getComputerID()
 HOST_NAME = 'client_'..CLIENT_ID
 
-local ui = require("client_lib.ui")
-local receiver = require("client_lib.receiver")
-local net = require('client_lib.net')
+local ui = require("lib.ui")
+local receiver = require("lib.receiver")
+local net = require('lib.net')
 
 
 --[[ Global Client State]]

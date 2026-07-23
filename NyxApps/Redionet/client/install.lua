@@ -25,8 +25,8 @@ fs.copy(
 )
 
 copyRecursive(
-    fs.combine(here, "client_lib"),
-    "/lib/redionet/client_lib"
+    fs.combine(here, "lib"),
+    "/lib/redionet/lib"
 )
 
 

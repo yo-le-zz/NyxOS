@@ -1,0 +1,109 @@
+name: "Application submission"
+description: "Submit an application to be included in NyxOS Apps"
+title: "[APP] "
+labels:
+  - app-submission
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## NyxOS Application Submission
+
+        Thank you for submitting an application for NyxOS.
+
+        Before submitting, make sure your application follows the NyxOS App Package structure and includes:
+        - `app.json`
+        - `LICENSE.txt`
+        - `ORIGIN.md`
+        - `control.lua
+        - `install.lua`
+        - `uninstall.lua`
+
+  - type: input
+    id: name
+    attributes:
+      label: Application name
+      description: The name of your application.
+      placeholder: "Example: CCTchat"
+    validations:
+      required: true
+
+  - type: input
+    id: repository
+    attributes:
+      label: Original repository
+      description: Link to the original GitHub repository.
+      placeholder: "https://github.com/user/project"
+    validations:
+      required: true
+
+  - type: input
+    id: author
+    attributes:
+      label: Author
+      description: Original author or organization.
+      placeholder: "Example: yo-le-zz"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Current application version.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Application description
+      description: Explain what your application does.
+      placeholder: "This application allows..."
+
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Application type
+      description: Select the supported application types.
+      multiple: true
+      options:
+        - Client
+        - Server
+        - Library
+        - System tool
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: structure
+    attributes:
+      label: Package requirements
+      description: Confirm that your package follows the NyxOS standard.
+      options:
+        - label: "The application contains a valid app.json"
+          required: true
+
+        - label: "The application contains LICENSE.txt"
+          required: true
+
+        - label: "The application contains ORIGIN.md"
+          required: true
+
+        - label: "The application contains install.lua"
+          required: true
+
+        - label: "The application contains uninstall.lua"
+          required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional information
+      description: Any additional information, screenshots, dependencies, or notes.
+      placeholder: "Optional information..."

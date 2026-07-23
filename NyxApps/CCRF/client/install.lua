@@ -59,17 +59,27 @@ end
 
 
 -- Configuration par défaut
-if not fs.exists(ETC_DEST .. "/config.json") then
-    local f = fs.open(ETC_DEST .. "/config.json", "w")
-    f.write(textutils.serialiseJSON({
-        password = "",
-        blacklist = {}
-    }))
-    f.close()
+local configSource = fs.combine(base, "config/config.json")
+local configDest = ETC_DEST .. "/config/config.json"
 
-    print("  Configuration créée.")
-else
+ensureDir(ETC_DEST .. "/config")
+
+if fs.exists(configDest) then
     print("  Configuration conservée.")
+else
+    if fs.exists(configSource) then
+        fs.copy(configSource, configDest)
+        print("  Configuration installée.")
+    else
+        local f = fs.open(configDest, "w")
+        f.write(textutils.serialiseJSON({
+            password = "",
+            blacklist = {}
+        }))
+        f.close()
+
+        print("  Configuration par défaut créée.")
+    end
 end
 
 
