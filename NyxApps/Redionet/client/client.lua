@@ -1,0 +1,204 @@
+--[[
+    Main application file for the music client.
+    This file loads all the necessary modules and starts the main client application loops.
+]]
+
+peripheral.find("modem", rednet.open)
+if not rednet.isOpen() then error("Failed to establish rednet connection. Attach a modem to continue.", 0) end
+
+SERVER_ID = nil     -- set in setup_server_connection
+
+CLIENT_ID = os.getComputerID()
+HOST_NAME = 'client_'..CLIENT_ID
+
+local ui = require("client_lib.ui")
+local receiver = require("client_lib.receiver")
+local net = require('client_lib.net')
+
+
+--[[ Global Client State]]
+CSTATE = {
+    last_search_query = nil,    -- set in `net`, used in `net` and `ui`  
+    search_results = nil,       -- list of at most 21 song_meta tables
+    is_paused = false,          -- if true, client stops processing music data transmissions
+    volume = 1.5,               -- value between 0 and 3
+    error_status = false,       -- SEARCH_ERROR, false
+    server_state = {
+        active_song_meta = nil,
+        queue = {},
+        is_loading = false,
+        loop_mode = 0,
+        status = -1,
+        error_status = false,
+    }
+}
+
+
+
+
+local speaker = peripheral.find("speaker")
+local monitor = peripheral.find("monitor")
+
+
+local function warn_speaker()
+    -- Recent CC:tweaked versions may support two peripherals on pocket 
+    -- https://github.com/cc-tweaked/CC-Tweaked/commit/0a0c80d
+    local no_warn = pocket and not pocket.equipBottom
+    if no_warn then
+        print('Pocket Client (no audio)')
+    else
+        local prev_color = term.getTextColor()
+        term.setTextColor(colors.orange)
+        print('WARN: No speaker attached. To receive audio on this device, attach speaker and reboot.')
+        term.setTextColor(prev_color)
+    end
+end
+
+local function setup_server_connection()
+    write('Waiting for server connection... ')
+    local id, server_settings
+
+    parallel.waitForAny(ui.loading_animation(), function ()
+        local payload, code
+        repeat
+            id = rednet.lookup('PROTO_SERVER')
+            if id then
+                rednet.send(id, "CONFIG", 'PROTO_SERVER')
+
+                id, payload = rednet.receive('PROTO_SERVER:REPLY', 1.0)
+                if payload then
+                    code, server_settings = table.unpack(payload)
+                end
+            end
+        until code == "CONFIG"
+    end)
+
+    SERVER_ID = id
+
+    return server_settings
+end
+
+if speaker then rednet.host('PROTO_AUDIO', HOST_NAME) else warn_speaker() end
+-- check speaker before connect to server to extend time warning visible
+local server_settings = setup_server_connection()
+
+
+settings.load()
+-- inherit client log level from server unless set locally
+if not settings.get('redionet.log_level') then
+    settings.set('redionet.log_level', server_settings['redionet.log_level'])
+    settings.save()
+end
+
+
+--[[ Client Loops ]]
+
+local function client_loop()
+    speaker = peripheral.find("speaker")
+    while true do
+        parallel.waitForAny(
+            --[[
+                Client Event
+            ]]
+            function ()
+                os.pullEvent('peripheral_detach')
+                -- speaker or modem detached
+                if (speaker and not peripheral.find('speaker')) or not peripheral.find("modem") then
+                    os.queueEvent('redionet:reload')
+                end
+            end,
+
+            --[[
+                Client Event -> Server Message 
+            ]]
+            function ()
+                os.pullEvent('redionet:sync_state')
+                rednet.send(SERVER_ID, {"STATE", nil}, "PROTO_SERVER_PLAYER")
+            end,
+            --[[
+                Server Message -> Client Event
+            ]]
+            function ()
+                local id, server_state = rednet.receive('PROTO_SERVER_STATE')
+                CSTATE.server_state = server_state
+                os.queueEvent('redionet:redraw_screen')
+            end,
+            
+            function ()
+                local id, command = rednet.receive('PROTO_COMMAND')
+
+                if command == 'sync' then
+                    -- no op, 
+                    -- server broadcasts PROTO_CLIENT_SYNC
+                
+                elseif command == 'reboot' then
+                    if monitor then monitor.clear() end
+                    os.queueEvent('redionet:reboot')
+                
+                elseif command == 'reload' then
+                    os.queueEvent('redionet:reload')
+                
+                elseif command == 'update' then
+                    local install_url = "https://raw.githubusercontent.com/Rypo/redionet/refs/heads/main/install.lua"
+                    local tabid = shell.openTab('wget run ' .. install_url)
+                    shell.switchTab(tabid)
+
+                    local _, file_changes = os.pullEvent('redionet:update_complete') -- Queued by install script
+                    rednet.send(SERVER_ID, file_changes, "PROTO_UPDATED")
+                    
+                    if file_changes then
+                        os.queueEvent('redionet:reload')
+                    end
+                end
+            end,
+
+            --[[
+                (Peer|Server) Message -> Client Event 
+            ]]
+            function ()
+                -- flush the other speaker buffers whenever a client resumes play
+                -- this forces all clients to remain in sync
+                local id = rednet.receive('PROTO_CLIENT_SYNC')
+                if speaker then
+                    speaker.stop()
+                    os.queueEvent("redionet:playback_stopped")
+                end
+            end
+        )
+
+    end
+
+end
+
+receiver.update_server_state(true) -- get initial server state before proceeding
+
+local on_exit
+local function system_stop_event()
+    -- The only events that should allow the program to terminate
+    parallel.waitForAny(
+        function ()
+            os.pullEvent('redionet:reload')
+            on_exit = 'reload'
+            term.setCursorPos(1, 1)
+            term.setBackgroundColor(colors.black)
+            term.clear()
+        end,
+        function ()
+            os.pullEvent('redionet:reboot')
+            on_exit = 'reboot'
+        end
+    )
+end
+
+-- Start main client loops
+parallel.waitForAny(
+    system_stop_event,
+    client_loop,
+    ui.ui_loop,
+    net.http_search_loop,
+    receiver.receive_loop
+)
+
+if     on_exit == 'reload' then shell.run('client')
+elseif on_exit == 'reboot' then os.reboot()
+end
