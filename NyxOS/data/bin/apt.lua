@@ -425,7 +425,9 @@ local function cmdInstall(source, variantArg)
             return
         end
 
-        local installerPath = fs.combine(tmpDir, (variantDef.installer or (variant .. "/install.lua")):gsub("^" .. variant .. "/", ""))
+        local installerRel = variantDef.installer or (variant .. "/install.lua")
+        installerRel = (installerRel:gsub("^" .. variant .. "/", ""))
+        local installerPath = fs.combine(tmpDir, installerRel)
         if not fs.exists(installerPath) then
             -- installer path in app.json is relative to the package
             -- root (e.g. "client/install.lua") -- try that directly too.

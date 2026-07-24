@@ -48,6 +48,7 @@ local FILES = {
     "data/bin/encrypt.lua",
     "data/bin/find.lua",
     "data/bin/grep.lua",
+    "data/bin/guimode.lua",
     "data/bin/head.lua",
     "data/bin/hostname.lua",
     "data/bin/logs.lua",

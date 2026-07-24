@@ -247,9 +247,15 @@ end
 -- Text wizard
 ------------------------------------------------------------------
 
-local function askYesNo(prompt)
+-- defaultValue is returned when the user just presses Enter (empty
+-- answer) -- e.g. askYesNo("... [y]: ", true) so the shown "[y]" hint
+-- actually matches the behaviour.
+local function askYesNo(prompt, defaultValue)
     write(prompt)
     local answer = read()
+    if answer == nil or answer == "" then
+        return defaultValue and true or false
+    end
     return answer == "y" or answer == "Y" or answer == "yes"
 end
 
@@ -309,7 +315,7 @@ local function wizardText(presets, mode)
     local preset = presets[choice]
 
     print("")
-    local gui = askYesNo("Install the graphical interface (Basalt)? (y/n) [y]: ")
+    local gui = askYesNo("Install the graphical interface (Basalt)? (y/n) [y]: ", true)
 
     print("")
     if not askYesNo("Confirm installation? (y/n): ") then

@@ -136,6 +136,12 @@ local pages = {
         "rednet helper commands (see 'man net' in the source for details).",
     },
     machineid = { "machineid", "Shows this computer's NyxOS machine identity." },
+    guimode = {
+        "guimode [on|off]",
+        "Shows or changes whether NyxOS boots with the graphical",
+        "interface (Basalt) or stays in text mode. Takes effect on",
+        "the next reboot.",
+    },
     man = {
         "man <command>",
         "Shows a NyxOS command's help in a pager.",
