@@ -5,6 +5,7 @@
 
 local net = require("client_lib.net")
 local receiver = require("client_lib.receiver")
+local library = require("client_lib.library")
 
 local M = {}
 
@@ -55,6 +56,7 @@ config.ui = {
     play_button =   { x = xpos,      y = 6, width = 6, label_play = " Join ", label_stop = " Quit "},
     skip_button =   { x = xpos + 8,  y = 6, width = 6, label = " Skip " }, -- +1 extra gap 
     loop_button =   { x = xpos + 15, y = 6, width = 10, labels = { " Loop Off ", " Loop All ", " Loop One " } },
+    shuffle_button = { x = xpos + 26, y = 6, width = 11, labels = { " Shuf: Off ", " Shuf: On  " } }, -- 🔀, sits right after loop_button; may need repositioning on narrow/pocket screens
     volume_slider = { x = xpos,      y = 8, width = 25 },
     queue = { start_y = 10, height = 2 },
 
@@ -66,6 +68,7 @@ config.ui = {
     menu_play_now =     { x = xpos, y = 6, label = "Play now" },
     menu_play_next =    { x = xpos, y = 8, label = "Play next" },
     menu_add_to_queue = { x = xpos, y = 10, label = "Add to queue" },
+    menu_favorite =     { x = xpos, y = 12, label = "Toggle favorite" }, -- ⭐
     menu_cancel =       { x = xpos, y = config.term_height, label = "Cancel" },
 
     -- include metaconfig vals in config.ui 
@@ -89,6 +92,7 @@ M.state.waiting_for_input = false
 M.state.in_search_result_view = false
 M.state.clicked_result_index = nil
 M.state.loop_mode = 0 -- Local only
+M.state.shuffle_mode = false -- Local only, synced from CSTATE.server_state each redraw
 M.state.ui_enabled = true -- alias for (not CSTATE.is_paused) currently
 
 M.state.now_playing_seconds = 0
@@ -103,6 +107,7 @@ M.state.sr_menu = {
         config.ui.menu_play_now,
         config.ui.menu_play_next,
         config.ui.menu_add_to_queue,
+        config.ui.menu_favorite,
         config.ui.menu_cancel
     },
     hl_idx = 3, -- add_to_queue default highlighted
@@ -267,6 +272,20 @@ local function draw_now_playing_tab()
     end
     term.setCursorPos(btn_cfg.x, btn_cfg.y)
     term.write(btn_cfg.labels[M.state.loop_mode + 1])
+
+    -- Shuffle
+    M.state.shuffle_mode = CSTATE.server_state.shuffle_mode -- sync up with server state
+    btn_cfg = config.ui.shuffle_button
+
+    if not M.state.ui_enabled then
+        set_colors(config.colors.btn_text_disabled, config.colors.btn_bg)
+    elseif M.state.shuffle_mode then
+        set_colors(config.colors.text_active, config.colors.bg_active)
+    else
+        set_colors(config.colors.text, config.colors.btn_bg)
+    end
+    term.setCursorPos(btn_cfg.x, btn_cfg.y)
+    term.write(btn_cfg.labels[M.state.shuffle_mode and 2 or 1])
 
     -- Volume slider
     local vol_cfg = config.ui.volume_slider
@@ -529,7 +548,11 @@ local function handle_click(button, x, y)
         elseif y == config.ui.menu_add_to_queue.y then -- Add to queue
             btn_clicked = config.ui.menu_add_to_queue
             code = "ADD"
-        
+
+        elseif y == config.ui.menu_favorite.y then -- Toggle favorite ⭐
+            btn_clicked = config.ui.menu_favorite
+            code = "FAVORITE"
+
         elseif y == config.ui.menu_cancel.y then -- Cancel
             btn_clicked = config.ui.menu_cancel
             code = nil
@@ -546,7 +569,9 @@ local function handle_click(button, x, y)
 
         M.redraw_screen()
 
-        if code then
+        if code == "FAVORITE" then
+            library.favorite_toggle(result) -- fire and forget, no blocking UI on the reply
+        elseif code then
             receiver.send_server_queue(result, code)
         end
         
@@ -582,6 +607,10 @@ local function handle_click(button, x, y)
                 elseif is_in_box(x, y, config.ui.loop_button) then
                     M.state.loop_mode = (M.state.loop_mode + 1) % 3
                     receiver.send_server_player("LOOP", M.state.loop_mode)
+
+                elseif is_in_box(x, y, config.ui.shuffle_button) then
+                    M.state.shuffle_mode = not M.state.shuffle_mode
+                    library.shuffle_set(M.state.shuffle_mode)
                 end
             end
         elseif y == config.ui.volume_slider.y then -- volume slider always active since no effect on other clients 
@@ -643,7 +672,7 @@ local function handle_key_press(key, is_held)
 
         
         elseif CSTATE.search_results then -- Search results navigation
-            local n_options = #M.state.sr_menu.items -- [Now, Next, Add queue, Cancel] 
+            local n_options = #M.state.sr_menu.items -- [Now, Next, Add queue, Favorite, Cancel] 
             
             if key_name == "down" then
                 if M.state.in_search_result_view then
@@ -677,7 +706,7 @@ local function handle_key_press(key, is_held)
 
             elseif key_name == "backspace" then
                 if M.state.in_search_result_view then 
-                    local menu_cancel = M.state.sr_menu.items[4]
+                    local menu_cancel = M.state.sr_menu.items[#M.state.sr_menu.items]
                     handle_click(0, menu_cancel.x, menu_cancel.y) -- cancel
                 
                 elseif M.state.hl_idx ~= nil then 

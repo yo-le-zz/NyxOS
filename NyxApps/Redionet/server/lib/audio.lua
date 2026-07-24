@@ -7,6 +7,7 @@ local dfpwm = require("cc.audio.dfpwm")
 
 local network = require("server_lib.network")
 local chat = require('server_lib.chat')
+local library = require('server_lib.library')
 
 local AUDIO_CHUNK_SEC = 2.70 -- maximum tick multiple under 2.730666.. [(2^7 * 2^10) samples / 48000kHz]
 local TICK = 0.050
@@ -419,8 +420,13 @@ local function advance_queue()
     local up_next
 
     if #STATE.data.queue > 0 then
-        up_next = STATE.data.queue[1]
-        table.remove(STATE.data.queue, 1)
+        local pick_idx = 1
+        if STATE.data.shuffle_mode and #STATE.data.queue > 1 then
+            pick_idx = math.random(#STATE.data.queue) -- 🔀 shuffle: pick a random queued song instead of the next one
+        end
+
+        up_next = STATE.data.queue[pick_idx]
+        table.remove(STATE.data.queue, pick_idx)
     else
         set_state_queue_empty()
     end
@@ -532,6 +538,7 @@ function M.audio_loop()
                         if should_play then
                             -- announce here, last moment before audio actually plays
                             chat.announce_song(STATE.data.active_song_meta.artist, STATE.data.active_song_meta.name)
+                            library.history_add(STATE.data.active_song_meta) -- 🕒 record in play history
                             if dbuffer then
                                 dbuffer = dbuffer:destroy() -- if it still exists, the song didn't complete. cannot guarantee clean state
                             end

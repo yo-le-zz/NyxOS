@@ -15,6 +15,12 @@ local ui = require("lib.ui")
 local receiver = require("lib.receiver")
 local net = require('lib.net')
 
+-- Expose a small, stable scripting API as a global, so any Lua script running
+-- on this computer (shell, custom programs, etc.) can control playback:
+-- radio.play(id), radio.pause(), radio.resume(), radio.next(), radio.queue(id),
+-- radio.getCurrent(), radio.getPlaylist()
+radio = require("lib.api")
+
 
 --[[ Global Client State]]
 CSTATE = {
@@ -28,6 +34,7 @@ CSTATE = {
         queue = {},
         is_loading = false,
         loop_mode = 0,
+        shuffle_mode = false,
         status = -1,
         error_status = false,
     }

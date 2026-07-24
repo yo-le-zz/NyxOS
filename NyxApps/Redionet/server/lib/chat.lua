@@ -18,16 +18,20 @@ local M = {}
 settings.load()
 M.LOG_LEVEL = settings.get('redionet.log_level', 3)
 
-M.commands_list = {'help', 'reboot', 'reload', 'update', 'sync', }
+M.commands_list = {'help', 'reboot', 'reload', 'update', 'sync', 'shuffle', 'playlist', 'favorite', 'history', }
 M.command_valid = {} -- Set
 for _,v in ipairs(M.commands_list) do M.command_valid[v] = true end
 
 local command_help = {
-    ['help']   = "Display this help message.",
-    ['reboot'] = "Reboot server+clients, may not auto resume.",
-    ['reload'] = "Attempt server+clients hot reload.",
-    ['update'] = "Fetch updates from GitHub and reload.",
-    ['sync']   = "Force resynchronize audio streams.",
+    ['help']     = "Display this help message.",
+    ['reboot']   = "Reboot server+clients, may not auto resume.",
+    ['reload']   = "Attempt server+clients hot reload.",
+    ['update']   = "Fetch updates from GitHub and reload.",
+    ['sync']     = "Force resynchronize audio streams.",
+    ['shuffle']  = "Toggle shuffle (queue advances randomly).",
+    ['playlist'] = "playlist <create|delete|rename|play|list> [name]",
+    ['favorite'] = "List favorited songs.",
+    ['history']  = "history [clear] - show or clear recent play history.",
 }
 
 M.term = log_window
@@ -264,12 +268,15 @@ local function command_line()
                 cmd_window.setCursorPos(1,1)
                 cmd_window.clearLine()
 
-                if M.command_valid[cmd_name] then
+                -- cmd_name may be "cmd" or "cmd arg..." (e.g. "playlist create chill")
+                local cmd, arg = cmd_name:match("^(%S+)%s*(.-)%s*$")
+
+                if cmd and M.command_valid[cmd] then
                     if history[#history] ~= cmd_name then table.insert(history, cmd_name) end
                     cmd_window.setTextColor(colors.lime)
                     cmd_window.write(("[OK] rn %s."):format(cmd_name))
 
-                    os.queueEvent('redionet:issue_command', cmd_name)
+                    os.queueEvent('redionet:issue_command', cmd, arg)
                 else
                     cmd_window.setTextColor(colors.red)
                     cmd_window.write(("[ERR] rn `%s` \149 rn help - to show commands"):format(cmd_name))
@@ -306,7 +313,7 @@ function M.chat_loop()
                 -- fires if a real (Advanced Peripherals) chatBox is attached or imitated with PROTO_CHATBOX
                 local ev, user, message, uuid, ishidden = os.pullEvent("chat")
                 message = string.lower(message)
-                local cmd = message:match("rn (%l+)") -- match format: "rn lowercaseletters"
+                local cmd, arg = message:match("rn (%l+)%s*(.-)$") -- match format: "rn lowercaseletters [arg...]"
 
                 -- probably too rigid long term, but fine for now while few commands
                 if M.command_valid[cmd] then
@@ -317,7 +324,7 @@ function M.chat_loop()
                         chatBox.sendMessage(response, '&2'..'CMD', "[]", '&f') -- dark_green, white
                     end
 
-                    os.queueEvent('redionet:issue_command', cmd)
+                    os.queueEvent('redionet:issue_command', cmd, arg)
                 elseif cmd then
                     M.log_message(("Unknown Command: 'rn %s'\nAvailable: rn {%s}"):format(cmd, table.concat(M.commands_list, ', ')), "ERROR")
                 end

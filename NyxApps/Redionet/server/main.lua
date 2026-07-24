@@ -16,6 +16,7 @@ local original_term = term.current() -- chat module will redirect term to design
 local chat = require('lib.chat')
 local audio = require("lib.audio")
 local network = require("lib.network")
+local library = require("lib.library")
 
 
 --[[ Global Server State ]]
@@ -32,6 +33,7 @@ STATE = {
         queue = {},             -- song queue, list of objects like active_song_meta
         active_song_meta = nil, -- Metadata for the song in the player {id=str, name=str, artist=str, duration={H=int, M=int, S=int}}
         loop_mode = 0,          -- 0: Off, 1: Queue/List, 2: Song
+        shuffle_mode = false,   -- 🔀 if true, advance_queue picks a random queued song instead of the next one
 
         -- Network Status Info
         is_loading = false,     -- set in `network`, get in client.ui
@@ -70,6 +72,7 @@ local function restore_state(filename)
         STATE.data.queue            = state_data.queue
         STATE.data.active_song_meta = state_data.active_song_meta
         STATE.data.loop_mode        = state_data.loop_mode
+        STATE.data.shuffle_mode     = state_data.shuffle_mode or false
         -- network status info ignored, irrelevant after reset
 
         pcall(function() fs.delete(filename) end) -- allow fail without compromising restore
@@ -102,6 +105,7 @@ local function server_loop()
     }
 
     pcall(restore_state) -- restore pre-reboot/reload state, if any
+    pcall(library.load)  -- restore persisted playlists/favorites/history, if any
 
     local id, message
 
@@ -173,10 +177,82 @@ local function server_loop()
                         audio.skip_song()
                     elseif code == "LOOP" then
                         STATE.data.loop_mode = payload
+                    elseif code == "SHUFFLE" then
+                        STATE.data.shuffle_mode = payload
+                        os.queueEvent('redionet:broadcast_state', 'PROTO_PLAYER: SHUFFLE')
                     end
                 end
             end,
-            
+
+            function() -- 📜⭐🕒 Playlist / Favorite / History management
+                id, message = rednet.receive('PROTO_SERVER_LIBRARY')
+                local code, payload = table.unpack(message)
+                local reply
+
+                if code == "PLAYLIST_CREATE" then
+                    local ok, err = library.playlist_create(payload)
+                    reply = { ok = ok, err = err }
+
+                elseif code == "PLAYLIST_RENAME" then
+                    local ok, err = library.playlist_rename(payload[1], payload[2])
+                    reply = { ok = ok, err = err }
+
+                elseif code == "PLAYLIST_DELETE" then
+                    local ok, err = library.playlist_delete(payload)
+                    reply = { ok = ok, err = err }
+
+                elseif code == "PLAYLIST_ADD" then
+                    local ok, err = library.playlist_add_song(payload[1], payload[2])
+                    reply = { ok = ok, err = err }
+
+                elseif code == "PLAYLIST_REMOVE" then
+                    local ok, err = library.playlist_remove_song(payload[1], payload[2])
+                    reply = { ok = ok, err = err }
+
+                elseif code == "PLAYLIST_LIST" then
+                    reply = library.playlist_list()
+
+                elseif code == "PLAYLIST_GET" then
+                    reply = library.playlist_get(payload)
+
+                elseif code == "PLAYLIST_EXPORT" then
+                    reply = library.playlist_export(payload)
+
+                elseif code == "PLAYLIST_IMPORT" then
+                    local ok, err = library.playlist_import(payload[1], payload[2])
+                    reply = { ok = ok, err = err }
+
+                elseif code == "PLAYLIST_PLAY" then
+                    local items = library.playlist_get(payload)
+                    if items and #items > 0 then
+                        for i = #items, 2, -1 do table.insert(STATE.data.queue, 1, items[i]) end
+                        audio.play_song(items[1])
+                        if STATE.data.status == -1 then STATE.data.status = 1 end
+                        reply = { ok = true }
+                    else
+                        reply = { ok = false, err = "empty_or_not_found" }
+                    end
+
+                elseif code == "FAVORITE_TOGGLE" then
+                    local ok, is_fav = library.favorite_toggle(payload)
+                    reply = { ok = ok, is_favorite = is_fav }
+
+                elseif code == "FAVORITE_LIST" then
+                    reply = library.favorite_list()
+
+                elseif code == "HISTORY_LIST" then
+                    reply = library.history_list()
+
+                elseif code == "HISTORY_CLEAR" then
+                    library.history_clear()
+                    reply = { ok = true }
+                end
+
+                if reply ~= nil then
+                    rednet.send(id, reply, 'PROTO_SERVER_LIBRARY:REPLY')
+                end
+            end,
+
             -- Misc Client Communication
             function ()
                 local cid, client_file_changes = rednet.receive('PROTO_UPDATED')
@@ -206,7 +282,8 @@ local function server_event_loop()
             end,
 
             function()
-                local ev, cmd = os.pullEvent('redionet:issue_command')
+                local ev, cmd, arg = os.pullEvent('redionet:issue_command')
+                arg = arg or ""
 
                 if cmd == 'help' then
                     -- TODO: bypass issue_command, keep all help display logic in chat module 
@@ -214,6 +291,73 @@ local function server_event_loop()
                 elseif cmd == 'sync' then
                     -- need to be cautious about when sync occurs. If timing is off, it will *grow* the speaker buffer rather than clear it
                     audio.state.need_sync = true
+
+                elseif cmd == 'shuffle' then
+                    STATE.data.shuffle_mode = not STATE.data.shuffle_mode
+                    os.queueEvent('redionet:broadcast_state', 'cmd:shuffle')
+                    chat.log_message(('Shuffle: %s'):format(STATE.data.shuffle_mode and 'On' or 'Off'), 'INFO')
+
+                elseif cmd == 'playlist' then
+                    local sub, rest = arg:match("^(%S*)%s*(.-)$")
+
+                    if sub == 'create' and rest ~= '' then
+                        local ok, err = library.playlist_create(rest)
+                        chat.log_message(ok and ('Playlist created: %s'):format(rest) or ('Playlist error: %s'):format(err), ok and 'INFO' or 'WARN')
+
+                    elseif sub == 'delete' and rest ~= '' then
+                        local ok, err = library.playlist_delete(rest)
+                        chat.log_message(ok and ('Playlist deleted: %s'):format(rest) or ('Playlist error: %s'):format(err), ok and 'INFO' or 'WARN')
+
+                    elseif sub == 'rename' and rest ~= '' then
+                        local old_name, new_name = rest:match("^(%S+)%s+(%S+)$")
+                        if old_name and new_name then
+                            local ok, err = library.playlist_rename(old_name, new_name)
+                            chat.log_message(ok and ('Playlist renamed: %s -> %s'):format(old_name, new_name) or ('Playlist error: %s'):format(err), ok and 'INFO' or 'WARN')
+                        else
+                            chat.log_message('Usage: rn playlist rename <old_name> <new_name>', 'WARN')
+                        end
+
+                    elseif sub == 'play' and rest ~= '' then
+                        local items = library.playlist_get(rest)
+                        if items and #items > 0 then
+                            for i = #items, 2, -1 do table.insert(STATE.data.queue, 1, items[i]) end
+                            audio.play_song(items[1])
+                            if STATE.data.status == -1 then STATE.data.status = 1 end
+                        else
+                            chat.log_message(('Playlist empty or not found: %s'):format(rest), 'WARN')
+                        end
+
+                    elseif sub == 'list' or sub == '' then
+                        local names = {}
+                        for _, pl in ipairs(library.playlist_list()) do
+                            table.insert(names, ('%s (%d)'):format(pl.name, pl.count))
+                        end
+                        chat.log_message('Playlists: ' .. (#names > 0 and table.concat(names, ', ') or '(none)'), 'INFO')
+
+                    else
+                        chat.log_message('Usage: rn playlist <create|delete|rename|play|list> [name]', 'WARN')
+                    end
+
+                elseif cmd == 'favorite' then
+                    local names = {}
+                    for _, song in ipairs(library.favorite_list()) do
+                        table.insert(names, ('%s - %s'):format(song.artist or '?', song.name or song.id))
+                    end
+                    chat.log_message('Favorites: ' .. (#names > 0 and table.concat(names, ' | ') or '(none)'), 'INFO')
+
+                elseif cmd == 'history' then
+                    if arg == 'clear' then
+                        library.history_clear()
+                        chat.log_message('History cleared.', 'INFO')
+                    else
+                        local names = {}
+                        for i, entry in ipairs(library.history_list()) do
+                            if i > 10 then break end
+                            table.insert(names, ('%s - %s'):format(entry.artist or '?', entry.name or entry.id))
+                        end
+                        chat.log_message('Recent history: ' .. (#names > 0 and table.concat(names, ' | ') or '(none)'), 'INFO')
+                    end
+
                 else
                     rednet.broadcast(cmd, 'PROTO_COMMAND')
                     os.queueEvent(('redionet:%s'):format(cmd))
