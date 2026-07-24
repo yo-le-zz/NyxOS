@@ -1,0 +1,4 @@
+# greet.nyx
+set NAME World
+echo Hello, $NAME!
+neofetch

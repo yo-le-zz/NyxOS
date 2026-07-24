@@ -1,5 +1,5 @@
--- /bin/whoami.lua : affiche l'utilisateur courant
+-- /bin/whoami.lua : prints the current user
 
 local nyxlib = dofile("/lib/nyxlib.lua")
 local passwd = nyxlib.loadPasswd()
-print(passwd.username or "inconnu")
+print(passwd.username or "unknown")

@@ -1,37 +1,36 @@
--- /bin/adduser.lua : cree un nouvel utilisateur NyxOS
--- Usage : adduser <nom> [admin]
--- Reserve aux administrateurs.
+-- /bin/adduser.lua : creates a new NyxOS user
+-- Usage: adduser <name> [admin]
+-- Restricted to administrators.
 
 local nyxlib = dofile("/lib/nyxlib.lua")
 local users = dofile("/lib/users.lua")
+local permissions = dofile("/lib/permissions.lua")
 
-local session = nyxlib.loadSession()
-local me = session.username and users.find(session.username) or nil
-
-if not me or not me.admin then
-    print("Permission refusee : seul un administrateur peut creer des utilisateurs.")
+local ok, err = permissions.requirePrivileged("creating users")
+if not ok then
+    print(err)
     return
 end
 
 local args = { ... }
 local name = args[1]
 if not name then
-    write("Nom du nouvel utilisateur : ")
+    write("New username: ")
     name = read()
 end
 if not name or name == "" then
-    print("Nom d'utilisateur invalide.")
+    print("Invalid username.")
     return
 end
 
 local isAdmin = (args[2] == "admin")
 
-write("Mot de passe pour " .. name .. " (optionnel) : ")
+write("Password for " .. name .. " (optional): ")
 local password = read("*")
 
 local ok, err = users.add(name, password, isAdmin)
 if ok then
-    print("Utilisateur '" .. name .. "' cree" .. (isAdmin and " (administrateur)" or "") .. ".")
+    print("User '" .. name .. "' created" .. (isAdmin and " (administrator)" or "") .. ".")
 else
-    print("Echec : " .. tostring(err))
+    print("Failed: " .. tostring(err))
 end

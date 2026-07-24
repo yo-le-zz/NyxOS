@@ -1,31 +1,45 @@
--- webinstall.lua : installeur web de NyxOS
--- Usage : wget https://raw.githubusercontent.com/yo-le-zz/NyxOS/main/webinstall.lua webinstall.lua && webinstall
+-- webinstall.lua : NyxOS web installer
+-- Usage: wget https://raw.githubusercontent.com/yo-le-zz/NyxOS/main/webinstall.lua webinstall.lua && webinstall
 --
--- Telecharge install.lua et le dossier data/ depuis GitHub, puis lance
--- l'installation ou la mise a jour si NyxOS est deja present.
+-- Downloads install.lua and the data/ folder from GitHub, then runs the
+-- installer/updater if NyxOS is already present.
 
-local VERSION = "1.0.0"
+local VERSION = "1.0.1"
 local REPO_BASE = "https://raw.githubusercontent.com/yo-le-zz/NyxOS/main/NyxOS"
 local palette = colors or colours
 
--- Liste des fichiers a telecharger (relatifs a NyxOS/)
+-- Files to download (relative to NyxOS/)
 local FILES = {
     "install.lua",
     "data/startup.lua",
     "data/etc/motd",
     "data/etc/apt/installed.lua",
+    "data/etc/services/heartbeat.lua",
     "data/lib/basalt.lua",
     "data/lib/crypto.lua",
+    "data/lib/db.lua",
     "data/lib/display.lua",
     "data/lib/login.lua",
+    "data/lib/logger.lua",
+    "data/lib/machineid.lua",
+    "data/lib/monitorbridge.lua",
+    "data/lib/network.lua",
+    "data/lib/nyxapi.lua",
     "data/lib/nyxlib.lua",
+    "data/lib/permissions.lua",
+    "data/lib/services.lua",
+    "data/lib/services/heartbeat.lua",
     "data/lib/shellui.lua",
     "data/lib/theme.lua",
+    "data/lib/tmp.lua",
+    "data/lib/toolkit.lua",
     "data/lib/users.lua",
     "data/bin/adduser.lua",
     "data/bin/apt.lua",
     "data/bin/cat.lua",
+    "data/bin/curl.lua",
     "data/bin/date.lua",
+    "data/bin/db.lua",
     "data/bin/deluser.lua",
     "data/bin/df.lua",
     "data/bin/diagbasalt.lua",
@@ -36,10 +50,21 @@ local FILES = {
     "data/bin/grep.lua",
     "data/bin/head.lua",
     "data/bin/hostname.lua",
+    "data/bin/logs.lua",
+    "data/bin/machineid.lua",
     "data/bin/man.lua",
+    "data/bin/mkpkg.lua",
+    "data/bin/net.lua",
     "data/bin/neofetch.lua",
+    "data/bin/newterm.lua",
     "data/bin/passwd.lua",
     "data/bin/pwd.lua",
+    "data/bin/reboot.lua",
+    "data/bin/recovery.lua",
+    "data/bin/reset.lua",
+    "data/bin/service.lua",
+    "data/bin/shutdown.lua",
+    "data/bin/sudo.lua",
     "data/bin/tail.lua",
     "data/bin/testbasalt.lua",
     "data/bin/touch.lua",
@@ -49,6 +74,7 @@ local FILES = {
     "data/bin/uptime.lua",
     "data/bin/users.lua",
     "data/bin/wc.lua",
+    "data/bin/wget.lua",
     "data/bin/whoami.lua",
 }
 
@@ -67,17 +93,17 @@ local function download(url)
         ["User-Agent"] = "NyxOS-WebInstall/" .. VERSION,
     })
     if not response then
-        return nil, "HTTP indisponible (verifie http_enable=true dans config)"
+        return nil, "HTTP unavailable (check http_enable=true in the config)"
     end
     local code = response.getResponseCode and response.getResponseCode() or 200
     if code < 200 or code >= 300 then
         response.close()
-        return nil, "HTTP " .. tostring(code) .. " pour " .. url
+        return nil, "HTTP " .. tostring(code) .. " for " .. url
     end
     local body = response.readAll()
     response.close()
     if not body or body == "" then
-        return nil, "Reponse vide pour " .. url
+        return nil, "Empty response for " .. url
     end
     return body
 end
@@ -104,18 +130,18 @@ local function main()
     term.setCursorPos(1, 1)
 
     if not http then
-        print("Erreur : HTTP non disponible.")
-        print("Active http_enable=true dans la config CC: Tweaked.")
+        print("Error: HTTP unavailable.")
+        print("Enable http_enable=true in the CC: Tweaked config.")
         return
     end
 
     local updateMode = isInstalled()
     if updateMode then
-        print("=== Mise a jour NyxOS via le web ===")
-        print("NyxOS est deja installe. Telechargement de la version " .. VERSION .. "...")
+        print("=== NyxOS web update ===")
+        print("NyxOS is already installed. Downloading version " .. VERSION .. "...")
     else
-        print("=== Installation NyxOS via le web ===")
-        print("Telechargement de la version " .. VERSION .. "...")
+        print("=== NyxOS web install ===")
+        print("Downloading version " .. VERSION .. "...")
     end
     print("")
 
@@ -129,7 +155,7 @@ local function main()
             print("OK")
             okCount = okCount + 1
         else
-            print("ECHEC")
+            print("FAILED")
             print("    " .. tostring(err))
             failCount = failCount + 1
         end
@@ -137,17 +163,17 @@ local function main()
 
     print("")
     if failCount > 0 then
-        print("Telechargement partiel : " .. okCount .. " OK, " .. failCount .. " echec(s).")
-        print("Verifie ta connexion et relance webinstall.")
+        print("Partial download: " .. okCount .. " OK, " .. failCount .. " failure(s).")
+        print("Check your connection and re-run webinstall.")
         return
     end
 
-    print("Telechargement termine (" .. okCount .. " fichiers).")
+    print("Download complete (" .. okCount .. " files).")
     print("")
     if updateMode then
-        print("Lancement de la mise a jour...")
+        print("Starting the update...")
     else
-        print("Lancement de l'installation...")
+        print("Starting the installation...")
     end
     print("")
 

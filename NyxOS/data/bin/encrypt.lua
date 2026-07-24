@@ -1,41 +1,47 @@
--- /bin/encrypt.lua : chiffrement de disque façon Linux (LUKS)
--- Interface graphique Basalt avec scan en temps réel
--- Usage : encrypt
+-- /bin/encrypt.lua : Linux-style (LUKS) disk encryption
+-- Basalt graphical interface with real-time scanning
+-- Usage: encrypt
 
 local crypto = dofile("/lib/crypto.lua")
 
--- Vérification du Cryptography Accelerator
+-- Check for the Cryptography Accelerator
 local cryptoOk, cryptoMsg = crypto.requireCrypto()
 if not cryptoOk then
     print(cryptoMsg)
     print("")
-    print("Options :")
-    print("1. Connectez un Cryptography Accelerator")
-    print("2. Utilisez le mode sans chiffrement (non securise)")
+    print("Options:")
+    print("1. Connect a Cryptography Accelerator")
+    print("2. Continue without encryption (not secure)")
     print("")
-    write("Continuer sans chiffrement ? (o/n) : ")
+    write("Continue without encryption? (y/n): ")
     local answer = read()
-    if answer ~= "o" and answer ~= "O" then
+    if answer ~= "y" and answer ~= "Y" then
         return
     end
-    print("ATTENTION: Mode sans chiffrement - mots de passe non securises")
+    print("WARNING: No-encryption mode - passwords are not secure")
     sleep(2)
 end
 
--- Essai multiple de chargement de Basalt
+-- Try multiple locations to load Basalt
 local basaltOk, basalt = pcall(dofile, "/lib/basalt.lua")
 if not basaltOk or not basalt then
-    -- Essai depuis le répertoire courant (pour tests depuis disk)
+    -- Try from the current directory (for tests run from disk)
     basaltOk, basalt = pcall(dofile, "data/lib/basalt.lua")
 end
 if not basaltOk or not basalt then
-    -- Essai depuis le chemin relatif
+    -- Try a relative path
     basaltOk, basalt = pcall(dofile, "../lib/basalt.lua")
+end
+if basaltOk and basalt then
+    local bridgeOk, bridge = pcall(dofile, "/lib/monitorbridge.lua")
+    if bridgeOk and bridge then
+        pcall(bridge.patch, basalt)
+    end
 end
 
 local CONFIG_PATH = "/etc/encrypt-config.lua"
 
--- Charge la configuration des disques chiffrés
+-- Loads the encrypted disk configuration
 local function loadConfig()
     if not fs.exists(CONFIG_PATH) then
         return {}
@@ -50,19 +56,19 @@ local function loadConfig()
     return {}
 end
 
--- Sauvegarde la configuration
+-- Saves the configuration
 local function saveConfig(config)
     local f = fs.open(CONFIG_PATH, "w")
     f.write(textutils.serialize(config))
     f.close()
 end
 
--- Détecte tous les disques/drives disponibles
+-- Detects all available disks/drives
 local function findDrives()
     local drives = {}
     local sides = {"top", "bottom", "left", "right", "front", "back"}
-    
-    -- Recherche par côté (directement connecté)
+
+    -- Search by side (directly connected)
     for _, side in ipairs(sides) do
         if peripheral.isPresent(side) then
             local p = peripheral.wrap(side)
@@ -79,20 +85,20 @@ local function findDrives()
             end
         end
     end
-    
-    -- Recherche par nom réseau (wired modems - drive_0, drive_1, disk_drive, etc.)
+
+    -- Search by network name (wired modems - drive_0, drive_1, disk_drive, etc.)
     local names = peripheral.getNames()
     for _, name in ipairs(names) do
         local p = peripheral.wrap(name)
         if not p then
             goto continue
         end
-        
-        -- Vérifie si c'est un drive (a la méthode getMountPath)
+
+        -- Check if this is a drive (has the getMountPath method)
         if p.getMountPath then
             local mount = p.getMountPath()
             if mount then
-                -- Vérifie si ce drive n'est pas déjà dans la liste
+                -- Check if this drive isn't already in the list
                 local found = false
                 for _, drive in ipairs(drives) do
                     if drive.name == name then
@@ -101,7 +107,7 @@ local function findDrives()
                     end
                 end
                 if not found then
-                    -- Détermine le type
+                    -- Determine the type
                     local driveType = "network_drive"
                     if name:match("^drive_%d+$") then
                         driveType = "wired_drive"
@@ -110,7 +116,7 @@ local function findDrives()
                     elseif name:find("drive") then
                         driveType = "network_drive"
                     end
-                    
+
                     table.insert(drives, {
                         name = name,
                         mount = mount,
@@ -120,76 +126,76 @@ local function findDrives()
                 end
             end
         end
-        
+
         ::continue::
     end
-    
+
     return drives
 end
 
--- Mode texte de secours si Basalt n'est pas disponible
-local function textMode()
+-- Fallback text mode if Basalt is unavailable
+local function textMode(...)
     local args = { ... }
-    
+
     if #args == 0 then
         local drives = findDrives()
         local config = loadConfig()
-        
+
         if #drives == 0 then
-            print("Aucun disque detecte.")
-            print("Connectez un drive (disk drive) a l'ordinateur.")
+            print("No disk detected.")
+            print("Connect a drive (disk drive) to the computer.")
             return
         end
-        
-        print("Disques disponibles :")
+
+        print("Available disks:")
         print("")
-        
+
         for i, drive in ipairs(drives) do
             local encrypted = config[drive.name]
-            local status = "Non chiffre"
+            local status = "Not encrypted"
             if encrypted then
                 if encrypted.unlocked then
-                    status = "Chiffre (DEVERROUILLE)"
+                    status = "Encrypted (UNLOCKED)"
                 else
-                    status = "Chiffre (VERROUILLE)"
+                    status = "Encrypted (LOCKED)"
                 end
             end
-            
+
             print(string.format("%d) %s", i, drive.name))
-            print("   Montage : " .. drive.mount)
-            print("   Type : " .. drive.type)
-            print("   Statut : " .. status)
+            print("   Mount   : " .. drive.mount)
+            print("   Type    : " .. drive.type)
+            print("   Status  : " .. status)
             print("")
         end
     else
-        print("Mode texte non supporte pour les actions.")
-        print("Utilisez l'interface graphique.")
+        print("Text mode does not support actions.")
+        print("Use the graphical interface.")
     end
 end
 
--- Interface graphique Basalt
+-- Basalt graphical interface
 local function guiMode()
     local palette = colors or colours
     local main = basalt.getMainFrame():setBackground(palette.black)
     local w, h = main:getWidth(), main:getHeight()
-    
+
     local config = loadConfig()
     local selectedDrive = nil
     local drives = {}
-    
-    -- Titre
+
+    -- Title
     main:addLabel()
-        :setText("Chiffrement de Disque - NyxOS")
+        :setText("Disk Encryption - NyxOS")
         :setForeground(palette.cyan)
         :setPosition(2, 2)
-    
-    -- Label de statut de scan
+
+    -- Scan status label
     local scanStatus = main:addLabel()
-        :setText("Scan en cours...")
+        :setText("Scanning...")
         :setForeground(palette.yellow)
         :setPosition(2, 4)
-    
-    -- Liste des disques
+
+    -- Drive list
     local driveList = main:addList()
         :setPosition(2, 5)
         :setSize(w - 4, math.min(8, h - 12))
@@ -197,108 +203,108 @@ local function guiMode()
         :setForeground(palette.white)
         :setSelectedBackground(palette.blue)
         :setSelectedForeground(palette.white)
-    
-    -- Label de détails du disque sélectionné
+
+    -- Selected drive details label
     local detailsLabel = main:addLabel()
         :setText("")
         :setForeground(palette.lightGray)
         :setPosition(2, 14)
         :setSize(w - 4, 3)
-    
-    -- Boutons d'action
+
+    -- Action buttons
     local encryptButton = main:addButton()
-        :setText("Chiffrer")
+        :setText("Encrypt")
         :setPosition(2, h - 2)
         :setSize(12, 1)
         :setBackground(palette.green)
         :setForeground(palette.black)
         :setEnabled(false)
-    
+
     local unlockButton = main:addButton()
-        :setText("Deverrouiller")
+        :setText("Unlock")
         :setPosition(15, h - 2)
         :setSize(14, 1)
         :setBackground(palette.yellow)
         :setForeground(palette.black)
         :setEnabled(false)
-    
+
     local lockButton = main:addButton()
-        :setText("Verrouiller")
+        :setText("Lock")
         :setPosition(30, h - 2)
         :setSize(12, 1)
         :setBackground(palette.orange)
         :setForeground(palette.black)
         :setEnabled(false)
-    
+
     local refreshButton = main:addButton()
-        :setText("Actualiser")
+        :setText("Refresh")
         :setPosition(w - 12, h - 2)
         :setSize(10, 1)
         :setBackground(palette.blue)
         :setForeground(palette.white)
-    
-    -- Label de messages
+
+    -- Message label
     local messageLabel = main:addLabel()
         :setText("")
         :setForeground(palette.red)
         :setPosition(2, h - 4)
-    
-    -- Fonction pour mettre à jour la liste des disques
+
+    -- Refreshes the drive list
     local function updateDriveList()
         driveList:clearItems()
-        scanStatus:setText("Scan en cours...")
+        scanStatus:setText("Scanning...")
         scanStatus:setForeground(palette.yellow)
         basalt.update()
-        sleep(0.5) -- Délai pour voir le scan en cours
-        
+        sleep(0.5) -- Delay so the scan is visible
+
         drives = findDrives()
-        
+
         if #drives == 0 then
-            scanStatus:setText("Aucun disque detecte")
+            scanStatus:setText("No disk detected")
             scanStatus:setForeground(palette.red)
-            driveList:addItem("Aucun disque disponible")
-            detailsLabel:setText("Connectez un drive a l'ordinateur.")
+            driveList:addItem("No disk available")
+            detailsLabel:setText("Connect a drive to the computer.")
             encryptButton:setEnabled(false)
             unlockButton:setEnabled(false)
             lockButton:setEnabled(false)
             return
         end
-        
-        scanStatus:setText(#drives .. " disque(s) detecte(s)")
+
+        scanStatus:setText(#drives .. " disk(s) detected")
         scanStatus:setForeground(palette.green)
         basalt.update()
-        sleep(0.3) -- Délai pour voir le résultat
-        
+        sleep(0.3) -- Delay so the result is visible
+
         for i, drive in ipairs(drives) do
             local encrypted = config[drive.name]
-            local status = "[NON CHIFFRE]"
+            local status = "[NOT ENCRYPTED]"
             if encrypted then
                 if encrypted.unlocked then
-                    status = "[DEVERROUILLE]"
+                    status = "[UNLOCKED]"
                 else
-                    status = "[VERROUILLE]"
+                    status = "[LOCKED]"
                 end
             end
             driveList:addItem(string.format("%s %s - %s", status, drive.name, drive.type))
         end
-        
-        -- Ne désactive pas les boutons ici, ils seront activés lors de la sélection
-        detailsLabel:setText("Selectionnez un disque pour voir les options")
+
+        -- Don't disable the buttons here, they'll be enabled on selection
+        detailsLabel:setText("Select a disk to see the options")
     end
-    
-    -- Sélection d'un disque
+
+    -- Selecting a disk
     driveList:onSelect(function(self, index, item)
         if index > #drives then
             selectedDrive = nil
             return
         end
-        
+
         selectedDrive = drives[index]
         local encrypted = config[selectedDrive.name]
-        
-        detailsLabel:setText(string.format("Disque: %s | Montage: %s | Type: %s", 
+
+        detailsLabel:setText(string.format("Disk: %s | Mount: %s | Type: %s",
             selectedDrive.name, selectedDrive.mount, selectedDrive.type))
-        
+
         if encrypted then
             encryptButton:setEnabled(false)
             if encrypted.unlocked then
@@ -313,85 +319,85 @@ local function guiMode()
             unlockButton:setEnabled(false)
             lockButton:setEnabled(false)
         end
-        
+
         messageLabel:setText("")
     end)
-    
-    -- Bouton Actualiser
+
+    -- Refresh button
     refreshButton:onClick(function()
         messageLabel:setText("")
         config = loadConfig()
         updateDriveList()
     end)
-    
-    -- Bouton Chiffrer
+
+    -- Encrypt button
     encryptButton:onClick(function()
         if not selectedDrive then return end
-        
-        -- Fenêtre de confirmation
+
+        -- Confirmation window
         local confirmWindow = basalt.createFrame()
             :setSize(40, 10)
             :setPosition(math.floor((w - 40) / 2), math.floor((h - 10) / 2))
             :setBackground(palette.gray)
-        
+
         confirmWindow:addLabel()
-            :setText("Chiffrement du disque")
+            :setText("Disk encryption")
             :setForeground(palette.white)
             :setPosition(2, 2)
-        
+
         confirmWindow:addLabel()
-            :setText("Disque: " .. selectedDrive.name)
+            :setText("Disk: " .. selectedDrive.name)
             :setForeground(palette.lightGray)
             :setPosition(2, 3)
-        
+
         confirmWindow:addLabel()
-            :setText("ATTENTION: Tous les fichiers seront chiffrés")
+            :setText("WARNING: All files will be encrypted")
             :setForeground(palette.red)
             :setPosition(2, 5)
-        
+
         local passInput = confirmWindow:addInput()
             :setPosition(2, 7)
             :setSize(36, 1)
             :setBackground(palette.darkGray)
             :setForeground(palette.white)
-            :setPlaceholder("Mot de passe")
+            :setPlaceholder("Password")
             :setReplaceChar("*")
-        
+
         local confirmBtn = confirmWindow:addButton()
-            :setText("Chiffrer")
+            :setText("Encrypt")
             :setPosition(2, 9)
             :setSize(18, 1)
             :setBackground(palette.green)
             :setForeground(palette.black)
-        
+
         local cancelBtn = confirmWindow:addButton()
-            :setText("Annuler")
+            :setText("Cancel")
             :setPosition(22, 9)
             :setSize(16, 1)
             :setBackground(palette.red)
             :setForeground(palette.white)
-        
+
         cancelBtn:onClick(function()
             confirmWindow:hide()
         end)
-        
+
         confirmBtn:onClick(function()
             local password = passInput:getText()
             if not password or password == "" then
-                messageLabel:setText("Le mot de passe ne peut pas etre vide.")
+                messageLabel:setText("Password cannot be empty.")
                 confirmWindow:hide()
                 return
             end
-            
-            -- Génère la clé
+
+            -- Derive the key
             local key = crypto.hash(password)
             if #key < 32 then
                 key = key .. string.rep("0", 32 - #key)
             end
             key = key:sub(1, 32)
-            
+
             local salt = crypto.generateKey()
-            
+
             config[selectedDrive.name] = {
                 encrypted = true,
                 unlocked = false,
@@ -399,121 +405,121 @@ local function guiMode()
                 keyHash = crypto.hash(key)
             }
             saveConfig(config)
-            
+
             confirmWindow:hide()
-            messageLabel:setText("Disque chiffre avec succes!")
+            messageLabel:setText("Disk encrypted successfully!")
             messageLabel:setForeground(palette.green)
             updateDriveList()
         end)
-        
+
         confirmWindow:show()
         passInput:setFocused(true)
     end)
-    
-    -- Bouton Déverrouiller
+
+    -- Unlock button
     unlockButton:onClick(function()
         if not selectedDrive then return end
-        
+
         local confirmWindow = basalt.createFrame()
             :setSize(40, 8)
             :setPosition(math.floor((w - 40) / 2), math.floor((h - 8) / 2))
             :setBackground(palette.gray)
-        
+
         confirmWindow:addLabel()
-            :setText("Deverrouillage du disque")
+            :setText("Unlocking disk")
             :setForeground(palette.white)
             :setPosition(2, 2)
-        
+
         confirmWindow:addLabel()
-            :setText("Disque: " .. selectedDrive.name)
+            :setText("Disk: " .. selectedDrive.name)
             :setForeground(palette.lightGray)
             :setPosition(2, 3)
-        
+
         local passInput = confirmWindow:addInput()
             :setPosition(2, 5)
             :setSize(36, 1)
             :setBackground(palette.darkGray)
             :setForeground(palette.white)
-            :setPlaceholder("Mot de passe")
+            :setPlaceholder("Password")
             :setReplaceChar("*")
-        
+
         local confirmBtn = confirmWindow:addButton()
-            :setText("Deverrouiller")
+            :setText("Unlock")
             :setPosition(2, 7)
             :setSize(18, 1)
             :setBackground(palette.green)
             :setForeground(palette.black)
-        
+
         local cancelBtn = confirmWindow:addButton()
-            :setText("Annuler")
+            :setText("Cancel")
             :setPosition(22, 7)
             :setSize(16, 1)
             :setBackground(palette.red)
             :setForeground(palette.white)
-        
+
         cancelBtn:onClick(function()
             confirmWindow:hide()
         end)
-        
+
         confirmBtn:onClick(function()
             local password = passInput:getText()
             if not password or password == "" then
-                messageLabel:setText("Mot de passe requis.")
+                messageLabel:setText("Password required.")
                 messageLabel:setForeground(palette.red)
                 confirmWindow:hide()
                 return
             end
-            
+
             local key = crypto.hash(password)
             if #key < 32 then
                 key = key .. string.rep("0", 32 - #key)
             end
             key = key:sub(1, 32)
-            
+
             local keyHash = crypto.hash(key)
             if keyHash ~= config[selectedDrive.name].keyHash then
-                messageLabel:setText("Mot de passe incorrect!")
+                messageLabel:setText("Incorrect password!")
                 messageLabel:setForeground(palette.red)
                 confirmWindow:hide()
                 return
             end
-            
+
             config[selectedDrive.name].unlocked = true
             config[selectedDrive.name].key = key
             saveConfig(config)
-            
+
             confirmWindow:hide()
-            messageLabel:setText("Disque deverrouille!")
+            messageLabel:setText("Disk unlocked!")
             messageLabel:setForeground(palette.green)
             updateDriveList()
         end)
-        
+
         confirmWindow:show()
         passInput:setFocused(true)
     end)
-    
-    -- Bouton Verrouiller
+
+    -- Lock button
     lockButton:onClick(function()
         if not selectedDrive then return end
-        
+
         config[selectedDrive.name].unlocked = false
         config[selectedDrive.name].key = nil
         saveConfig(config)
-        
-        messageLabel:setText("Disque verrouille!")
+
+        messageLabel:setText("Disk locked!")
         messageLabel:setForeground(palette.green)
         updateDriveList()
     end)
-    
-    -- Mise à jour initiale
+
+    -- Initial refresh
     updateDriveList()
-    
+
     basalt.run()
 end
 
--- Point d'entrée principal
+-- Main entry point
 if not basaltOk or not basalt then
-    print("Basalt non disponible. Mode texte de secours.")
+    print("Basalt unavailable. Falling back to text mode.")
     textMode(...)
 else
     term.clear()

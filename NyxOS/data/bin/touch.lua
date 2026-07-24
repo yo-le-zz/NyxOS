@@ -1,9 +1,9 @@
--- /bin/touch.lua : cree un fichier vide s'il n'existe pas
+-- /bin/touch.lua : creates an empty file if it doesn't exist
 
 local args = {...}
 
 if #args == 0 then
-    print("Usage : touch <fichier> [fichier2 ...]")
+    print("Usage: touch <file> [file2 ...]")
     return
 end
 

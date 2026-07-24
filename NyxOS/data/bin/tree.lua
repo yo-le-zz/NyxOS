@@ -1,4 +1,4 @@
--- /bin/tree.lua : affiche l'arborescence d'un dossier
+-- /bin/tree.lua : shows a folder's file tree
 
 local args = {...}
 
@@ -20,7 +20,7 @@ end
 root = shell.resolve(root)
 
 if not fs.exists(root) then
-    print("Chemin introuvable : " .. root)
+    print("Path not found: " .. root)
     return
 end
 
@@ -56,4 +56,4 @@ end
 print(root)
 walk(root, "", 1)
 print("")
-print(dirCount .. " dossier(s), " .. fileCount .. " fichier(s)")
+print(dirCount .. " folder(s), " .. fileCount .. " file(s)")

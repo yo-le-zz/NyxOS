@@ -1,15 +1,14 @@
--- /lib/users.lua : gestion multi-utilisateurs de NyxOS
+-- /lib/users.lua : NyxOS multi-user management
 --
--- /etc/passwd contient desormais une LISTE d'utilisateurs :
+-- /etc/passwd now contains a LIST of users:
 --   { { username="alice", password="...", home="/home/alice", admin=true },
 --     { username="bob",   password="",    home="/home/bob",   admin=false }, ... }
 --
--- L'ancien format mono-utilisateur (une seule table avec .username /
--- .password / .home directement) est migre automatiquement vers ce
--- nouveau format des la premiere lecture, pour rester compatible avec
--- les installations existantes.
+-- The old single-user format (one table with .username / .password /
+-- .home directly) is automatically migrated to this new format on the
+-- first read, to stay compatible with existing installs.
 --
--- Les mots de passe sont maintenant hachés avec SHA-256 via le module crypto
+-- Passwords are now hashed with SHA-256 via the crypto module
 
 local PASSWD_PATH = "/etc/passwd"
 local crypto = dofile("/lib/crypto.lua")
@@ -39,7 +38,7 @@ local users = {}
 function users.load()
     local data = loadTable(PASSWD_PATH)
     if data.username then
-        -- Ancien format mono-utilisateur -> migration vers une liste.
+        -- Old single-user format -> migrate to a list.
         data = { {
             username = data.username,
             password = data.password,
@@ -72,13 +71,13 @@ function users.checkPassword(name, password)
     if u.password == nil or u.password == "" then
         return true
     end
-    -- Verification par hash (SHA-256 materiel ou fallback logiciel, 32 ou 64 hex)
+    -- Verify against hash (hardware or software-fallback SHA-256, 32 or 64 hex chars)
     if crypto.verifyPassword(password, u.password) then
         return true
     end
-    -- Migration automatique : mot de passe en clair -> hachage
+    -- Automatic migration: plaintext password -> hash
     if u.password == password then
-        -- Hache et met à jour le mot de passe
+        -- Hash and update the password
         local list = users.load()
         for _, user in ipairs(list) do
             if user.username == name then
@@ -92,23 +91,23 @@ function users.checkPassword(name, password)
     return false
 end
 
--- Cree un nouvel utilisateur. admin=true en fait un administrateur
--- (seuls les administrateurs peuvent creer/supprimer des utilisateurs).
+-- Creates a new user. admin=true makes them an administrator
+-- (only administrators can create/delete users).
 function users.add(name, password, admin)
     if not name or name == "" then
-        return false, "Le nom d'utilisateur ne peut pas etre vide."
+        return false, "Username cannot be empty."
     end
     local list = users.load()
     for _, u in ipairs(list) do
         if u.username == name then
-            return false, "Cet utilisateur existe deja."
+            return false, "This user already exists."
         end
     end
     local home = "/home/" .. name
     if not fs.exists(home) then
         fs.makeDir(home)
     end
-    -- Hache le mot de passe avant de le stocker
+    -- Hash the password before storing it
     local hashedPassword = ""
     if password and password ~= "" then
         hashedPassword = crypto.hash(password)
@@ -143,7 +142,7 @@ function users.setPassword(name, password)
     local list = users.load()
     for _, u in ipairs(list) do
         if u.username == name then
-            -- Hache le mot de passe avant de le stocker
+            -- Hash the password before storing it
             local hashedPassword = ""
             if password and password ~= "" then
                 hashedPassword = crypto.hash(password)
@@ -172,8 +171,8 @@ function users.count()
     return #users.load()
 end
 
--- Y a-t-il au moins un autre administrateur que `name` ? (utilise pour
--- empecher de se retrouver sans aucun admin apres une suppression)
+-- Is there at least one other administrator besides `name`? (used to
+-- avoid ending up with no admin at all after a deletion)
 function users.hasOtherAdmin(name)
     for _, u in ipairs(users.load()) do
         if u.admin and u.username ~= name then

@@ -1,0 +1,5 @@
+# setup.nyx
+echo Setting up my tools...
+apt tool install basalt
+apt install cctchat client
+echo All done!

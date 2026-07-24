@@ -1,5 +1,5 @@
--- /bin/head.lua : affiche les N premieres lignes d'un fichier
--- Usage : head [-n N] <fichier>
+-- /bin/head.lua : prints the first N lines of a file
+-- Usage: head [-n N] <file>
 
 local args = {...}
 local n = 10
@@ -17,13 +17,13 @@ while i <= #args do
 end
 
 if not file then
-    print("Usage : head [-n N] <fichier>")
+    print("Usage: head [-n N] <file>")
     return
 end
 
 local path = shell.resolve(file)
 if not fs.exists(path) or fs.isDir(path) then
-    print("head : fichier introuvable : " .. file)
+    print("head: file not found: " .. file)
     return
 end
 

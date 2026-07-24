@@ -1,14 +1,14 @@
--- /lib/crypto.lua : module de cryptographie pour NyxOS
--- Utilise le Cryptography Accelerator de CC: Tweaked si disponible
--- Fournit des fonctions de hash (SHA-256) et de chiffrement (AES)
+-- /lib/crypto.lua : cryptography module for NyxOS
+-- Uses CC: Tweaked's Cryptography Accelerator if available
+-- Provides hashing (SHA-256) and encryption (AES) functions
 
 local crypto = {}
 
--- Détecte et retourne le Cryptography Accelerator connecté
+-- Detects and returns the connected Cryptography Accelerator
 local function findCryptoAccelerator()
     local sides = {"top", "bottom", "left", "right", "front", "back"}
-    
-    -- Recherche par côté (directement connecté)
+
+    -- Search by side (directly connected)
     for _, side in ipairs(sides) do
         if peripheral.isPresent(side) then
             local p = peripheral.wrap(side)
@@ -17,64 +17,64 @@ local function findCryptoAccelerator()
             end
         end
     end
-    
-    -- Cherche dans les périphériques réseau (wired modems)
+
+    -- Search network peripherals (wired modems)
     local names = peripheral.getNames()
     for _, name in ipairs(names) do
         local p = peripheral.wrap(name)
         if not p then
             goto continue
         end
-        
-        -- Vérifie si le nom contient "cryptographic_accelerator" (avec ou sans numéro _0, _1, etc.)
+
+        -- Check if the name contains "cryptographic_accelerator" (with or without a _0, _1, ... suffix)
         if name:lower():find("cryptographic_accelerator") then
             if p.encrypt then
                 return p, name
             end
         end
-        
-        -- Vérifie aussi si le périphérique a la méthode encrypt (pour les périphériques avec noms différents)
+
+        -- Also check if the peripheral has the encrypt method (for peripherals with different names)
         if p.encrypt then
             return p, name
         end
-        
+
         ::continue::
     end
-    
+
     return nil, nil
 end
 
--- Cache du Cryptography Accelerator
+-- Cached Cryptography Accelerator
 local cryptoDevice, cryptoDeviceName = findCryptoAccelerator()
 
--- Vérifie si le Cryptography Accelerator est disponible
+-- Checks whether the Cryptography Accelerator is available
 function crypto.isAvailable()
     if cryptoDevice then
         return true, cryptoDeviceName
     end
-    -- Réessayer la détection (peut avoir été branché à chaud)
+    -- Retry detection (it may have been hot-plugged)
     cryptoDevice, cryptoDeviceName = findCryptoAccelerator()
     return cryptoDevice ~= nil, cryptoDeviceName
 end
 
--- Fonction pour bloquer si pas de Cryptography Accelerator
--- Retourne true si disponible, false sinon avec message d'erreur
+-- Blocks if there is no Cryptography Accelerator
+-- Returns true if available, false otherwise with an error message
 function crypto.requireCrypto()
     local ok, name = crypto.isAvailable()
     if ok then
         return true, name
     else
-        return false, "ERREUR: Cryptography Accelerator non detecte. Connectez un peripherique 'cryptographic_accelerator' pour continuer."
+        return false, "ERROR: Cryptography Accelerator not detected. Connect a 'cryptographic_accelerator' peripheral to continue."
     end
 end
 
--- Hash un mot de passe avec SHA-256
--- Retourne le hash en hexadécimal
+-- Hashes a password with SHA-256
+-- Returns the hash in hexadecimal
 function crypto.hash(password)
     if not password or password == "" then
         return ""
     end
-    
+
     local ok, device = crypto.isAvailable()
     if ok and device then
         local success, result = pcall(function()
@@ -84,14 +84,14 @@ function crypto.hash(password)
             return result
         end
     end
-    
-    -- Fallback : hash amélioré basé sur les caractères (moins sécurisé mais unique)
-    -- Génère un hash de 64 caractères pour compatibilité avec SHA-256
+
+    -- Fallback: improved character-based hash (less secure, but unique)
+    -- Generates a 64-character hash for SHA-256 compatibility
     local hash1 = 0
     local hash2 = 0
     local hash3 = 0
     local hash4 = 0
-    
+
     for i = 1, #password do
         local byte = string.byte(password, i)
         hash1 = ((hash1 * 31) + byte) % 2147483647
@@ -99,17 +99,17 @@ function crypto.hash(password)
         hash3 = ((hash3 * 41) + byte * i) % 2147483647
         hash4 = ((hash4 * 43) + bit32.bxor(byte, i)) % 2147483647
     end
-    
+
     local h1 = string.format("%08x", hash1)
     local h2 = string.format("%08x", hash2)
     local h3 = string.format("%08x", hash3)
     local h4 = string.format("%08x", hash4)
-    
-    -- Combine les 4 hashes pour obtenir 64 caractères uniques
+
+    -- Combine the 4 hashes into a unique 64-character result
     return h1 .. h2 .. h3 .. h4
 end
 
--- Génère une clé aléatoire pour le chiffrement
+-- Generates a random key for encryption
 function crypto.generateKey()
     local ok, device = crypto.isAvailable()
     if ok and device then
@@ -120,8 +120,8 @@ function crypto.generateKey()
             return result
         end
     end
-    
-    -- Fallback : clé pseudo-aléatoire
+
+    -- Fallback: pseudo-random key
     local key = {}
     for i = 1, 32 do
         key[i] = math.random(0, 255)
@@ -129,15 +129,15 @@ function crypto.generateKey()
     return string.char(unpack(key))
 end
 
--- Chiffre des données avec AES
--- data : string à chiffrer
--- key : clé de chiffrement (32 bytes pour AES-256)
--- Retourne les données chiffrées
+-- Encrypts data with AES
+-- data: string to encrypt
+-- key: encryption key (32 bytes for AES-256)
+-- Returns the encrypted data
 function crypto.encrypt(data, key)
     if not data or not key then
-        return nil, "Données ou clé manquantes"
+        return nil, "Missing data or key"
     end
-    
+
     local ok, device = crypto.isAvailable()
     if ok and device then
         local success, result = pcall(function()
@@ -146,11 +146,11 @@ function crypto.encrypt(data, key)
         if success and result then
             return result
         else
-            return nil, "Échec du chiffrement"
+            return nil, "Encryption failed"
         end
     end
-    
-    -- Fallback : XOR simple (non sécurisé, seulement pour compatibilité)
+
+    -- Fallback: simple XOR (not secure, compatibility only)
     local encrypted = {}
     local keyLen = #key
     for i = 1, #data do
@@ -159,15 +159,15 @@ function crypto.encrypt(data, key)
     return table.concat(encrypted)
 end
 
--- Déchiffre des données avec AES
--- data : données chiffrées
--- key : clé de déchiffrement (32 bytes pour AES-256)
--- Retourne les données déchiffrées
+-- Decrypts data with AES
+-- data: encrypted data
+-- key: decryption key (32 bytes for AES-256)
+-- Returns the decrypted data
 function crypto.decrypt(data, key)
     if not data or not key then
-        return nil, "Données ou clé manquantes"
+        return nil, "Missing data or key"
     end
-    
+
     local ok, device = crypto.isAvailable()
     if ok and device then
         local success, result = pcall(function()
@@ -176,11 +176,11 @@ function crypto.decrypt(data, key)
         if success and result then
             return result
         else
-            return nil, "Échec du déchiffrement"
+            return nil, "Decryption failed"
         end
     end
-    
-    -- Fallback : XOR simple (non sécurisé, seulement pour compatibilité)
+
+    -- Fallback: simple XOR (not secure, compatibility only)
     local decrypted = {}
     local keyLen = #key
     for i = 1, #data do
@@ -189,10 +189,10 @@ function crypto.decrypt(data, key)
     return table.concat(decrypted)
 end
 
--- Vérifie un mot de passe par rapport à son hash
+-- Verifies a password against its hash
 function crypto.verifyPassword(password, hash)
     if not hash or hash == "" then
-        return true -- Pas de mot de passe configuré
+        return true -- No password configured
     end
     if not password or password == "" then
         return false

@@ -1,10 +1,11 @@
--- /lib/shellui.lua : Shell graphique NyxOS avec Basalt
+-- /lib/shellui.lua : NyxOS graphical shell, built with Basalt
 --
--- Interface shell complete avec :
--- - Zone de sortie scrollable pour les commandes
--- - Champ input pour taper les commandes
--- - Support touch/click sur l'ecran
--- - Historique des commandes (haut/bas)
+-- Full shell interface with:
+-- - Scrollable output area per command
+-- - Input field for typing commands
+-- - Touch/click support on screen (via /lib/monitorbridge.lua)
+-- - Command history (up/down)
+-- - Several independent terminal tabs (a "+" button opens a new one)
 -- - Execution via shell.run()
 
 local shellui = {}
@@ -15,11 +16,11 @@ local function loadBasalt()
     return nyxlib.loadBasalt()
 end
 
--- Capture la sortie d'une commande et la renvoie sous forme de string
+-- Captures a command's output and returns it as a string
 local function captureCommand(cmd)
     local oldRedirect = term.redirect
     local output = {}
-    
+
     term.redirect({
         write = function(text)
             table.insert(output, text)
@@ -64,181 +65,253 @@ local function captureCommand(cmd)
             -- Ignore
         end,
     })
-    
+
     local ok, err = pcall(shell.run, cmd)
-    
+
     term.redirect(oldRedirect)
-    
-    return table.concat(output), err
+
+    return table.concat(output), (not ok) and err or nil
 end
 
--- Shell graphique principal
+-- Main graphical shell
 function shellui.run()
     local basalt = loadBasalt()
     if not basalt then
-        print("Erreur : Basalt non disponible. Shell graphique impossible.")
+        print("Error: Basalt unavailable. Cannot start the graphical shell.")
         return false
     end
 
     local theme = dofile("/lib/theme.lua")
     local accent = theme.accent()
     local nyxlib = dofile("/lib/nyxlib.lua")
+    local permissionsOk, permissions = pcall(dofile, "/lib/permissions.lua")
 
     local ok = pcall(function()
         local main = basalt.getMainFrame():setBackground(palette.black)
         local w, h = main:getWidth(), main:getHeight()
 
-        -- En-tête avec hostname et utilisateur
+        local session = nyxlib.loadSession()
+        local currentUser = session.username or "guest"
+
+        -- Header with hostname, user, clock
         local header = main:addFrame()
             :setPosition(1, 1)
-            :setSize(w, 2)
+            :setSize(w, 1)
             :setBackground(accent)
-        
+
         header:addLabel()
-            :setText("NyxOS - " .. nyxlib.getHostname())
+            :setText("NyxOS -- " .. nyxlib.getHostname())
             :setForeground(palette.black)
             :setPosition(2, 1)
-        
-        local currentUser = nyxlib.getSession() or "guest"
-        header:addLabel()
+
+        local userLabel = header:addLabel()
             :setText(currentUser .. "@nyxos")
             :setForeground(palette.black)
-            :setPosition(w - #currentUser - 8, 1)
+            :setPosition(math.max(2, w - #currentUser - 8), 1)
 
-        -- Zone de sortie des commandes (scrollable)
+        -- Tab bar (multiple independent terminals within the window)
+        local tabBar = main:addFrame()
+            :setPosition(1, 2)
+            :setSize(w, 1)
+            :setBackground(palette.gray)
+
+        -- Output area (scrollable)
         local outputBox = main:addTextBox()
             :setPosition(2, 4)
             :setSize(w - 3, h - 5)
-            :setBackground(palette.gray)
+            :setBackground(palette.black)
             :setForeground(palette.white)
-            :setText("NyxOS Shell Graphique v1.0\nTape 'help' pour la liste des commandes.\n\n")
 
-        -- Champ input pour les commandes
+        -- Command input field
         local inputLabel = main:addLabel()
             :setText("$")
             :setForeground(accent)
             :setPosition(2, h - 1)
-        
+
         local cmdInput = main:addInput()
             :setPosition(4, h - 1)
-            :setSize(w - 6, 1)
+            :setSize(w - 15, 1)
             :setBackground(palette.gray)
             :setForeground(palette.white)
-            :setPlaceholder("Entrez une commande...")
+            :setPlaceholder("Type a command...")
 
-        -- Historique des commandes
-        local history = {}
-        local historyIndex = 0
+        ------------------------------------------------------------
+        -- Multiple terminal tabs: each tab keeps its own output text
+        -- and command history, so switching tabs feels like switching
+        -- between independent terminal windows.
+        ------------------------------------------------------------
+        local tabs = {}
+        local activeTab = nil
+        local tabButtons = {}
 
-        -- Fonction pour exécuter une commande
+        local function motdText()
+            if fs.exists("/etc/motd") then
+                local f = fs.open("/etc/motd", "r")
+                local motd = f.readAll()
+                f.close()
+                if motd ~= "" then
+                    return motd .. "\n\n"
+                end
+            end
+            return "NyxOS Graphical Shell v1.0.1\nType 'help' for the command list, or 'man' for the manual.\n\n"
+        end
+
+        local function redrawTabBar()
+            for _, btn in ipairs(tabButtons) do
+                pcall(btn.destroy, btn)
+            end
+            tabButtons = {}
+            local x = 1
+            for i, tab in ipairs(tabs) do
+                local label = "Term " .. i
+                local btn = tabBar:addButton()
+                    :setText(label)
+                    :setPosition(x, 1)
+                    :setSize(#label + 2, 1)
+                    :setBackground(tab == activeTab and accent or palette.gray)
+                    :setForeground(tab == activeTab and palette.black or palette.white)
+                btn:onClick(function()
+                    activeTab = tab
+                    outputBox:setText(tab.output)
+                    outputBox:scrollTo("bottom")
+                    redrawTabBar()
+                end)
+                table.insert(tabButtons, btn)
+                x = x + #label + 3
+            end
+            local plusBtn = tabBar:addButton()
+                :setText("+")
+                :setPosition(x, 1)
+                :setSize(3, 1)
+                :setBackground(palette.darkGray)
+                :setForeground(palette.white)
+            plusBtn:onClick(function()
+                local newTab = { output = motdText(), history = {}, historyIndex = 1 }
+                table.insert(tabs, newTab)
+                activeTab = newTab
+                outputBox:setText(newTab.output)
+                redrawTabBar()
+            end)
+            table.insert(tabButtons, plusBtn)
+        end
+
+        local firstTab = { output = motdText(), history = {}, historyIndex = 1 }
+        table.insert(tabs, firstTab)
+        activeTab = firstTab
+        outputBox:setText(firstTab.output)
+        redrawTabBar()
+
+        -- Runs a command in the active tab
         local function executeCommand(cmd)
             if cmd == nil or cmd == "" then
                 return
             end
+            local tab = activeTab
 
-            -- Ajouter à l'historique
-            table.insert(history, cmd)
-            historyIndex = #history + 1
+            table.insert(tab.history, cmd)
+            tab.historyIndex = #tab.history + 1
 
-            -- Afficher la commande dans la sortie
-            local currentText = outputBox:getText()
-            outputBox:setText(currentText .. "$ " .. cmd .. "\n")
+            tab.output = tab.output .. "$ " .. cmd .. "\n"
+            outputBox:setText(tab.output)
 
-            -- Exécuter la commande et capturer la sortie
             local output, err = captureCommand(cmd)
-            
+
             if output and output ~= "" then
-                outputBox:setText(outputBox:getText() .. output .. "\n")
+                tab.output = tab.output .. output .. "\n"
             end
-            
-            if err and not ok then
-                outputBox:setText(outputBox:getText() .. "Erreur: " .. tostring(err) .. "\n")
+            if err then
+                tab.output = tab.output .. "Error: " .. tostring(err) .. "\n"
             end
-            
-            outputBox:setText(outputBox:getText() .. "\n")
-            
-            -- Scroll vers le bas
+            tab.output = tab.output .. "\n"
+
+            outputBox:setText(tab.output)
             outputBox:scrollTo("bottom")
-            
-            -- Vider l'input
             cmdInput:setText("")
+
+            -- Refresh the user label in case sudo/login state changed
+            local newSession = nyxlib.loadSession()
+            local user = newSession.username or "guest"
+            local suffix = ""
+            if permissionsOk and permissions and permissions.sudoActive(user) then
+                suffix = " [sudo]"
+            end
+            pcall(function() userLabel:setText(user .. "@nyxos" .. suffix) end)
         end
 
-        -- Gestion de la touche Entrée
         cmdInput:onKey(function(self, key)
+            local tab = activeTab
             if key == keys.enter or key == keys.numPadEnter then
                 executeCommand(cmdInput:getText())
             elseif key == keys.up then
-                -- Navigation dans l'historique (haut)
-                if historyIndex > 1 then
-                    historyIndex = historyIndex - 1
-                    cmdInput:setText(history[historyIndex] or "")
+                if tab.historyIndex > 1 then
+                    tab.historyIndex = tab.historyIndex - 1
+                    cmdInput:setText(tab.history[tab.historyIndex] or "")
                 end
             elseif key == keys.down then
-                -- Navigation dans l'historique (bas)
-                if historyIndex < #history then
-                    historyIndex = historyIndex + 1
-                    cmdInput:setText(history[historyIndex] or "")
+                if tab.historyIndex < #tab.history then
+                    tab.historyIndex = tab.historyIndex + 1
+                    cmdInput:setText(tab.history[tab.historyIndex] or "")
                 else
-                    historyIndex = #history + 1
+                    tab.historyIndex = #tab.history + 1
                     cmdInput:setText("")
                 end
             end
         end)
 
-        -- Bouton pour exécuter (support touch)
+        -- Run button (touch support)
         local runButton = main:addButton()
-            :setText("Exécuter")
+            :setText("Run")
             :setPosition(w - 10, h - 1)
-            :setSize(8, 1)
+            :setSize(5, 1)
             :setBackground(accent)
             :setForeground(palette.black)
             :onClick(function()
                 executeCommand(cmdInput:getText())
             end)
 
-        -- Focus sur l'input au démarrage
-        cmdInput:setFocused(true)
+        local newTermButton = main:addButton()
+            :setText("+Term")
+            :setPosition(w - 4, h - 1)
+            :setSize(5, 1)
+            :setBackground(palette.darkGray)
+            :setForeground(palette.white)
+            :onClick(function()
+                local newTab = { output = motdText(), history = {}, historyIndex = 1 }
+                table.insert(tabs, newTab)
+                activeTab = newTab
+                outputBox:setText(newTab.output)
+                redrawTabBar()
+            end)
 
-        -- Message d'accueil dans la sortie
-        local motd = ""
-        if fs.exists("/etc/motd") then
-            local f = fs.open("/etc/motd", "r")
-            motd = f.readAll()
-            f.close()
-        end
-        if motd and motd ~= "" then
-            outputBox:setText(motd .. "\n\n")
-        end
+        cmdInput:setFocused(true)
 
         basalt.run()
     end)
 
     if not ok then
-        print("Erreur lors du lancement du shell graphique.")
+        print("Error while starting the graphical shell.")
         return false
     end
 
     return true
 end
 
--- Version texte de secours (si Basalt échoue)
+-- Text fallback (if Basalt is unavailable/disabled)
 function shellui.runTextFallback()
     term.setBackgroundColor(palette.black)
     term.clear()
     term.setCursorPos(1, 1)
-    
+
     local nyxlib = dofile("/lib/nyxlib.lua")
     local theme = dofile("/lib/theme.lua")
     local accent = theme.accent()
-    
+
     pcall(term.setTextColor, accent)
-    print("=== NyxOS Shell (mode texte) ===")
+    print("=== NyxOS Shell (text mode) ===")
     pcall(term.setTextColor, palette.white)
-    print("Basalt indisponible - utilisation du shell standard.")
+    print("Basalt unavailable -- using the standard shell.")
     print("")
-    
-    -- Lancer le shell standard
+
     shell.run("/bin/shell")
 end
 

@@ -1,4 +1,4 @@
--- /bin/uname.lua : affiche les informations systeme
+-- /bin/uname.lua : prints system information
 
 local nyxlib = dofile("/lib/nyxlib.lua")
 
@@ -9,5 +9,5 @@ if fs.exists("/etc/nyx-release") then
     f.close()
 end
 
-local host = _HOST or "ComputerCraft (version inconnue)"
+local host = _HOST or "ComputerCraft (unknown version)"
 print(release .. " " .. nyxlib.getHostname() .. " " .. host)

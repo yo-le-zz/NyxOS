@@ -1,5 +1,5 @@
 -- /lib/nyxlib.lua
--- Fonctions utilitaires partagees par NyxOS
+-- Utility functions shared across NyxOS
 
 local nyxlib = {}
 
@@ -7,8 +7,8 @@ local MANIFEST_PATH = "/etc/apt/installed.lua"
 local PASSWD_PATH = "/etc/passwd"
 local SESSION_PATH = "/var/run/session.lua"
 
--- Lecture/ecriture generique de tables serialisees (utilise par le
--- manifeste apt, /etc/passwd, la config d'ecran, etc.)
+-- Generic read/write of serialised tables (used by the apt manifest,
+-- /etc/passwd, the display config, etc.)
 function nyxlib.loadTable(path)
     if not fs.exists(path) then
         return {}
@@ -30,18 +30,116 @@ function nyxlib.saveTable(path, data)
 end
 
 function nyxlib.loadManifest()
-    return nyxlib.loadTable(MANIFEST_PATH)
+    ------------------------------------------------------------------
+-- /dev special files (null, zero) -- CC:Tweaked has no real character
+-- devices, so this wraps fs.open once at boot to fake the two most
+-- commonly used ones. Every other path behaves exactly as before.
+------------------------------------------------------------------
+local devFsInstalled = false
+
+local function nullHandle()
+    return {
+        write = function() end,
+        writeLine = function() end,
+        close = function() end,
+        readAll = function() return "" end,
+        readLine = function() return nil end,
+        read = function() return nil end,
+    }
+end
+
+local function zeroHandle()
+    return {
+        write = function() end,
+        writeLine = function() end,
+        close = function() end,
+        readAll = function() return string.rep("\0", 4096) end,
+        readLine = function() return string.rep("\0", 256) end,
+        read = function(n) return 0 end,
+    }
+end
+
+function nyxlib.installDevFs()
+    if devFsInstalled then return end
+    devFsInstalled = true
+
+    if not fs.exists("/dev") then
+        fs.makeDir("/dev")
+    end
+
+    local originalOpen = fs.open
+    fs.open = function(path, mode)
+        local resolved = "/" .. fs.combine("", path)
+        if resolved == "/dev/null" then
+            return nullHandle()
+        elseif resolved == "/dev/zero" and (mode == "r" or mode == "rb" or mode == nil) then
+            return zeroHandle()
+        end
+        return originalOpen(path, mode)
+    end
+end
+
+return nyxlib.loadTable(MANIFEST_PATH)
 end
 
 function nyxlib.saveManifest(manifest)
     nyxlib.saveTable(MANIFEST_PATH, manifest)
 end
 
--- Session : quel utilisateur est actuellement connecte (ecrit par
--- /lib/login.lua au demarrage). Fichier volatile, efface a l'extinction
--- (il vit dans /var/run comme boot.time).
+-- Session: which user is currently logged in (written by /lib/login.lua
+-- at boot). Volatile file, cleared on shutdown (lives in /var/run like
+-- boot.time).
 function nyxlib.loadSession()
-    return nyxlib.loadTable(SESSION_PATH)
+    ------------------------------------------------------------------
+-- /dev special files (null, zero) -- CC:Tweaked has no real character
+-- devices, so this wraps fs.open once at boot to fake the two most
+-- commonly used ones. Every other path behaves exactly as before.
+------------------------------------------------------------------
+local devFsInstalled = false
+
+local function nullHandle()
+    return {
+        write = function() end,
+        writeLine = function() end,
+        close = function() end,
+        readAll = function() return "" end,
+        readLine = function() return nil end,
+        read = function() return nil end,
+    }
+end
+
+local function zeroHandle()
+    return {
+        write = function() end,
+        writeLine = function() end,
+        close = function() end,
+        readAll = function() return string.rep("\0", 4096) end,
+        readLine = function() return string.rep("\0", 256) end,
+        read = function(n) return 0 end,
+    }
+end
+
+function nyxlib.installDevFs()
+    if devFsInstalled then return end
+    devFsInstalled = true
+
+    if not fs.exists("/dev") then
+        fs.makeDir("/dev")
+    end
+
+    local originalOpen = fs.open
+    fs.open = function(path, mode)
+        local resolved = "/" .. fs.combine("", path)
+        if resolved == "/dev/null" then
+            return nullHandle()
+        elseif resolved == "/dev/zero" and (mode == "r" or mode == "rb" or mode == nil) then
+            return zeroHandle()
+        end
+        return originalOpen(path, mode)
+    end
+end
+
+return nyxlib.loadTable(SESSION_PATH)
 end
 
 function nyxlib.saveSession(username)
@@ -57,16 +155,64 @@ function nyxlib.clearSession()
     end
 end
 
--- Compatibilite : /etc/passwd contient maintenant une LISTE
--- d'utilisateurs (voir /lib/users.lua). Ces deux fonctions restent
--- fournies pour les commandes qui ne s'interessent qu'a
--- "l'utilisateur courant" (whoami, passwd, neofetch...) : elles
--- renvoient/mettent a jour l'utilisateur actuellement connecte
--- (ou, a defaut de session, le premier compte du systeme).
+-- Compatibility: /etc/passwd now holds a LIST of users (see
+-- /lib/users.lua). These two functions are still provided for commands
+-- that only care about "the current user" (whoami, passwd, neofetch,
+-- ...): they return/update the currently logged in user (or, absent a
+-- session, the system's first account).
 function nyxlib.loadPasswd()
     local ok, users = pcall(dofile, "/lib/users.lua")
     if not ok or not users then
-        return nyxlib.loadTable(PASSWD_PATH)
+        ------------------------------------------------------------------
+-- /dev special files (null, zero) -- CC:Tweaked has no real character
+-- devices, so this wraps fs.open once at boot to fake the two most
+-- commonly used ones. Every other path behaves exactly as before.
+------------------------------------------------------------------
+local devFsInstalled = false
+
+local function nullHandle()
+    return {
+        write = function() end,
+        writeLine = function() end,
+        close = function() end,
+        readAll = function() return "" end,
+        readLine = function() return nil end,
+        read = function() return nil end,
+    }
+end
+
+local function zeroHandle()
+    return {
+        write = function() end,
+        writeLine = function() end,
+        close = function() end,
+        readAll = function() return string.rep("\0", 4096) end,
+        readLine = function() return string.rep("\0", 256) end,
+        read = function(n) return 0 end,
+    }
+end
+
+function nyxlib.installDevFs()
+    if devFsInstalled then return end
+    devFsInstalled = true
+
+    if not fs.exists("/dev") then
+        fs.makeDir("/dev")
+    end
+
+    local originalOpen = fs.open
+    fs.open = function(path, mode)
+        local resolved = "/" .. fs.combine("", path)
+        if resolved == "/dev/null" then
+            return nullHandle()
+        elseif resolved == "/dev/zero" and (mode == "r" or mode == "rb" or mode == nil) then
+            return zeroHandle()
+        end
+        return originalOpen(path, mode)
+    end
+end
+
+return nyxlib.loadTable(PASSWD_PATH)
     end
     local session = nyxlib.loadSession()
     if session.username then
@@ -100,7 +246,7 @@ function nyxlib.savePasswd(passwd)
     nyxlib.saveTable(PASSWD_PATH, passwd)
 end
 
--- Lit /etc/hostname (fichier texte simple, pas serialise)
+-- Reads /etc/hostname (plain text file, not serialised)
 function nyxlib.getHostname()
     if not fs.exists("/etc/hostname") then
         return "nyxos"
@@ -117,12 +263,12 @@ function nyxlib.setHostname(name)
     f.close()
 end
 
--- Formate un nombre d'octets en Ko/Mo/Go lisibles
+-- Formats a byte count into human-readable KB/MB/GB
 function nyxlib.formatSize(bytes)
     if not bytes then
         return "?"
     end
-    local units = { "o", "Ko", "Mo", "Go" }
+    local units = { "B", "KB", "MB", "GB" }
     local i = 1
     while bytes >= 1024 and i < #units do
         bytes = bytes / 1024
@@ -131,9 +277,26 @@ function nyxlib.formatSize(bytes)
     return string.format("%.1f%s", bytes, units[i])
 end
 
--- Charge Basalt depuis plusieurs emplacements possibles (installe,
--- disquette data/, ou repli relatif).
+-- Loads Basalt from several possible locations (installed, data/
+-- floppy, or a relative fallback).
+-- Whether the graphical interface should be used at all. Set at
+-- install time (see install.lua's GUI checkbox); defaults to true when
+-- unset so existing installs keep behaving as before.
+function nyxlib.guiEnabled()
+    if not fs.exists("/etc/nyx-config.lua") then
+        return true
+    end
+    local cfg = nyxlib.loadTable("/etc/nyx-config.lua")
+    if cfg.gui == nil then
+        return true
+    end
+    return cfg.gui and true or false
+end
+
 function nyxlib.loadBasalt(extraPaths)
+    if not nyxlib.guiEnabled() then
+        return nil
+    end
     local paths = {}
     if extraPaths then
         for _, p in ipairs(extraPaths) do
@@ -147,6 +310,10 @@ function nyxlib.loadBasalt(extraPaths)
         if fs.exists(path) then
             local ok, mod = pcall(dofile, path)
             if ok and type(mod) == "table" and mod.getMainFrame then
+                local bridgeOk, bridge = pcall(dofile, "/lib/monitorbridge.lua")
+                if bridgeOk and bridge then
+                    pcall(bridge.patch, mod)
+                end
                 return mod
             end
         end
@@ -156,6 +323,55 @@ end
 
 function nyxlib.isInstalled()
     return fs.exists("/etc/nyx-release") or fs.exists("/startup.lua")
+end
+
+------------------------------------------------------------------
+-- /dev special files (null, zero) -- CC:Tweaked has no real character
+-- devices, so this wraps fs.open once at boot to fake the two most
+-- commonly used ones. Every other path behaves exactly as before.
+------------------------------------------------------------------
+local devFsInstalled = false
+
+local function nullHandle()
+    return {
+        write = function() end,
+        writeLine = function() end,
+        close = function() end,
+        readAll = function() return "" end,
+        readLine = function() return nil end,
+        read = function() return nil end,
+    }
+end
+
+local function zeroHandle()
+    return {
+        write = function() end,
+        writeLine = function() end,
+        close = function() end,
+        readAll = function() return string.rep("\0", 4096) end,
+        readLine = function() return string.rep("\0", 256) end,
+        read = function(n) return 0 end,
+    }
+end
+
+function nyxlib.installDevFs()
+    if devFsInstalled then return end
+    devFsInstalled = true
+
+    if not fs.exists("/dev") then
+        fs.makeDir("/dev")
+    end
+
+    local originalOpen = fs.open
+    fs.open = function(path, mode)
+        local resolved = "/" .. fs.combine("", path)
+        if resolved == "/dev/null" then
+            return nullHandle()
+        elseif resolved == "/dev/zero" and (mode == "r" or mode == "rb" or mode == nil) then
+            return zeroHandle()
+        end
+        return originalOpen(path, mode)
+    end
 end
 
 return nyxlib

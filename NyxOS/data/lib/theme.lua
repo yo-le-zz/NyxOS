@@ -1,21 +1,21 @@
--- /lib/theme.lua : couleur d'accent choisie a l'installation (facon CloverOS)
--- Stockee dans /etc/nyx-theme.lua : { name = "...", accent = colors.xxx }
+-- /lib/theme.lua : accent colour chosen at install time (CloverOS-style)
+-- Stored in /etc/nyx-theme.lua : { name = "...", accent = colors.xxx }
 
 local theme = {}
 local PATH = "/etc/nyx-theme.lua"
 local palette = colors or colours
 
--- Palette de couleurs proposee a l'installation, inspiree du choix de
--- theme de CloverOS (https://github.com/PalorderSoftWorksOfficial/CloverOS)
+-- Theme palette offered at install time, inspired by CloverOS's theme
+-- picker (https://github.com/PalorderSoftWorksOfficial/CloverOS)
 theme.presets = {
-    { name = "Violet Nyx",     accent = palette.purple },
-    { name = "Bleu Ocean",     accent = palette.blue },
+    { name = "Nyx Violet",     accent = palette.purple },
+    { name = "Ocean Blue",     accent = palette.blue },
     { name = "Cyan",           accent = palette.cyan },
-    { name = "Vert Foret",     accent = palette.green },
-    { name = "Orange Couchant",accent = palette.orange },
-    { name = "Rouge Cramoisi", accent = palette.red },
+    { name = "Forest Green",   accent = palette.green },
+    { name = "Sunset Orange",  accent = palette.orange },
+    { name = "Crimson Red",    accent = palette.red },
     { name = "Magenta",        accent = palette.magenta },
-    { name = "Gris Classique", accent = palette.lightGray },
+    { name = "Classic Grey",   accent = palette.lightGray },
 }
 
 local DEFAULT = { name = theme.presets[1].name, accent = theme.presets[1].accent }
@@ -40,9 +40,9 @@ function theme.save(data)
     f.close()
 end
 
--- Renvoie juste la couleur d'accent (avec repli si l'ordinateur n'est pas
--- un Advanced Computer/Monitor en couleur -- colors.xxx existe quand meme
--- comme constante, mais on repli sur "white" si jamais accent est nil).
+-- Returns just the accent colour (with a fallback if the computer isn't
+-- an Advanced Computer/Monitor in colour -- colors.xxx still exists as a
+-- constant, but we fall back to "white" if accent happens to be nil).
 function theme.accent()
     local t = theme.load()
     return t.accent or palette.white

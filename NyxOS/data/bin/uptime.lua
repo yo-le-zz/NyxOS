@@ -1,9 +1,9 @@
--- /bin/uptime.lua : affiche le temps ecoule depuis le demarrage
+-- /bin/uptime.lua : shows elapsed time since boot
 
 local BOOT_FILE = "/var/run/boot.time"
 
 if not fs.exists(BOOT_FILE) then
-    print("uptime : information indisponible (redemarre pour l'initialiser).")
+    print("uptime: information unavailable (reboot to initialise it).")
     return
 end
 
@@ -12,7 +12,7 @@ local bootTime = tonumber(f.readAll())
 f.close()
 
 if not bootTime then
-    print("uptime : information indisponible.")
+    print("uptime: information unavailable.")
     return
 end
 
@@ -26,7 +26,7 @@ local minutes = math.floor(seconds / 60)
 seconds = seconds % 60
 
 local parts = {}
-if days > 0 then table.insert(parts, days .. "j") end
+if days > 0 then table.insert(parts, days .. "d") end
 if hours > 0 or days > 0 then table.insert(parts, hours .. "h") end
 table.insert(parts, minutes .. "m")
 table.insert(parts, seconds .. "s")

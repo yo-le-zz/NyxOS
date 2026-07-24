@@ -1,4 +1,4 @@
--- /bin/date.lua : affiche la date et l'heure courantes (temps reel)
+-- /bin/date.lua : prints the current date and time (real time)
 
 local args = {...}
 local fmt = args[1] or "%d/%m/%Y %H:%M:%S"

@@ -1,8 +1,8 @@
--- /bin/df.lua : affiche l'espace disque disponible
+-- /bin/df.lua : shows available disk space
 
 local nyxlib = dofile("/lib/nyxlib.lua")
 
-print(string.format("%-20s %10s %10s", "Point de montage", "Libre", "Capacite"))
+print(string.format("%-20s %10s %10s", "Mount point", "Free", "Capacity"))
 
 local function printRoot(path)
     local free = fs.getFreeSpace(path)
@@ -12,7 +12,7 @@ end
 
 printRoot("/")
 
--- Disques/disquettes montes (ex: lecteurs de disque relies)
+-- Mounted disks/floppies (e.g. connected disk drives)
 for _, name in ipairs(fs.list("/")) do
     local path = "/" .. name
     if fs.isDir(path) and fs.isDriveRoot and fs.isDriveRoot(path) then

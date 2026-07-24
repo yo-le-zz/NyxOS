@@ -1,5 +1,5 @@
--- /bin/tail.lua : affiche les N dernieres lignes d'un fichier
--- Usage : tail [-n N] <fichier>
+-- /bin/tail.lua : prints the last N lines of a file
+-- Usage: tail [-n N] <file>
 
 local args = {...}
 local n = 10
@@ -17,13 +17,13 @@ while i <= #args do
 end
 
 if not file then
-    print("Usage : tail [-n N] <fichier>")
+    print("Usage: tail [-n N] <file>")
     return
 end
 
 local path = shell.resolve(file)
 if not fs.exists(path) or fs.isDir(path) then
-    print("tail : fichier introuvable : " .. file)
+    print("tail: file not found: " .. file)
     return
 end
 

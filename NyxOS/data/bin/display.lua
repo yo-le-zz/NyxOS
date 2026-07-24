@@ -1,8 +1,8 @@
--- /bin/display.lua : gere l'ecran (moniteur) connecte
--- Usage :
---   display          affiche l'ecran actuellement configure
---   display scan      relance la detection (ecran branche a chaud)
---   display scale <n> change l'echelle de texte de l'ecran connecte
+-- /bin/display.lua : manages the connected screen (monitor)
+-- Usage:
+--   display          shows the currently configured screen
+--   display scan      re-runs detection (hot-plugged screen)
+--   display scale <n> changes the connected screen's text scale
 
 local nyxdisplay = dofile("/lib/display.lua")
 local args = {...}
@@ -10,7 +10,7 @@ local args = {...}
 if args[1] == "scan" then
     local ok = nyxdisplay.setup(false)
     if not ok then
-        print("Aucun ecran (moniteur) detecte.")
+        print("No screen (monitor) detected.")
     end
     return
 end
@@ -18,27 +18,27 @@ end
 if args[1] == "scale" then
     local scale = tonumber(args[2])
     if not scale then
-        print("Usage : display scale <nombre>")
+        print("Usage: display scale <number>")
         return
     end
     local mon = nyxdisplay.findMonitor()
     if not mon then
-        print("Aucun ecran connecte.")
+        print("No screen connected.")
         return
     end
     local cfg = nyxdisplay.loadConfig()
     cfg.scale = scale
     nyxdisplay.saveConfig(cfg)
     mon.setTextScale(scale)
-    print("Echelle de texte mise a " .. scale .. ".")
+    print("Text scale set to " .. scale .. ".")
     return
 end
 
 local cfg = nyxdisplay.loadConfig()
 if cfg.side then
-    print("Ecran actif      : " .. cfg.side)
-    print("Type             : " .. (cfg.advanced and "Advanced Monitor (couleur)" or "Monitor standard"))
-    print("Echelle de texte : " .. tostring(cfg.scale))
+    print("Active screen    : " .. cfg.side)
+    print("Type             : " .. (cfg.advanced and "Advanced Monitor (colour)" or "Standard Monitor"))
+    print("Text scale       : " .. tostring(cfg.scale))
 else
-    print("Aucun ecran configure. Utilise 'display scan' pour en detecter un.")
+    print("No screen configured. Use 'display scan' to detect one.")
 end

@@ -1,65 +1,65 @@
--- /bin/testbasalt.lua : script de test pour vérifier Basalt
+-- /bin/testbasalt.lua : test script to verify Basalt loading
 
-print("Test de chargement de Basalt...")
+print("Testing Basalt load...")
 print("")
 
--- Test depuis data/lib (pendant l'installation)
-print("1. Test depuis data/lib/basalt.lua :")
+-- Test from data/lib (during install)
+print("1. Test from data/lib/basalt.lua :")
 local ok1, basalt1 = pcall(dofile, "data/lib/basalt.lua")
 if ok1 and basalt1 then
-    print("   SUCCES : Basalt charge depuis data/lib")
+    print("   SUCCESS: Basalt loaded from data/lib")
 else
-    print("   ECHEC : " .. tostring(basalt1))
+    print("   FAILED: " .. tostring(basalt1))
 end
 print("")
 
--- Test depuis /lib (après installation)
-print("2. Test depuis /lib/basalt.lua :")
+-- Test from /lib (after install)
+print("2. Test from /lib/basalt.lua :")
 if fs.exists("/lib/basalt.lua") then
     local ok2, basalt2 = pcall(dofile, "/lib/basalt.lua")
     if ok2 and basalt2 then
-        print("   SUCCES : Basalt charge depuis /lib")
+        print("   SUCCESS: Basalt loaded from /lib")
     else
-        print("   ECHEC : " .. tostring(basalt2))
+        print("   FAILED: " .. tostring(basalt2))
     end
 else
-    print("   Fichier introuvable : /lib/basalt.lua")
+    print("   File not found: /lib/basalt.lua")
 end
 print("")
 
--- Test avec pcall et dofile direct
-print("3. Test avec pcall(dofile, '/lib/basalt.lua') :")
+-- Test with pcall and direct dofile
+print("3. Test with pcall(dofile, '/lib/basalt.lua') :")
 local ok3, basalt3 = pcall(dofile, "/lib/basalt.lua")
 if ok3 then
     print("   pcall OK")
     if basalt3 then
-        print("   Basalt n'est pas nil")
+        print("   Basalt is not nil")
         if type(basalt3) == "table" then
-            print("   Basalt est une table")
+            print("   Basalt is a table")
         else
-            print("   Basalt est de type : " .. type(basalt3))
+            print("   Basalt is of type: " .. type(basalt3))
         end
     else
-        print("   Basalt est nil")
+        print("   Basalt is nil")
     end
 else
-    print("   pcall ECHEC : " .. tostring(basalt3))
+    print("   pcall FAILED: " .. tostring(basalt3))
 end
 print("")
 
--- Vérification de la taille du fichier
-print("4. Verification du fichier :")
+-- File size check
+print("4. File check:")
 if fs.exists("/lib/basalt.lua") then
     local size = fs.getSize("/lib/basalt.lua")
-    print("   Taille : " .. size .. " bytes")
+    print("   Size : " .. size .. " bytes")
     if size > 300000 then
-        print("   Taille correcte (> 300KB)")
+        print("   Size OK (> 300KB)")
     else
-        print("   Taille anormale (devrait etre > 300KB)")
+        print("   Size abnormal (should be > 300KB)")
     end
 else
-    print("   Fichier introuvable")
+    print("   File not found")
 end
 print("")
 
-print("Test termine.")
+print("Test complete.")

@@ -1,0 +1,13 @@
+# retry.nyx
+set ATTEMPTS 0
+
+label try
+echo Attempt number $ATTEMPTS...
+wait 1
+
+if $ATTEMPTS == 3 goto done
+set ATTEMPTS 1
+goto try
+
+label done
+echo Done after 3 attempts.

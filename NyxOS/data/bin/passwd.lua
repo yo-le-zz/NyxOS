@@ -1,10 +1,11 @@
--- /bin/passwd.lua : change le mot de passe d'un utilisateur
--- Usage : passwd            (change son propre mot de passe)
---         passwd <nom>      (change le mot de passe d'un autre compte,
---                             reserve aux administrateurs)
+-- /bin/passwd.lua : changes a user's password
+-- Usage: passwd            (changes your own password)
+--        passwd <name>     (changes another account's password,
+--                            restricted to administrators)
 
 local nyxlib = dofile("/lib/nyxlib.lua")
 local users = dofile("/lib/users.lua")
+local permissions = dofile("/lib/permissions.lua")
 
 local session = nyxlib.loadSession()
 local me = session.username and users.find(session.username) or nil
@@ -13,53 +14,54 @@ local args = { ... }
 local target = args[1]
 
 if target and target ~= (me and me.username) then
-    if not me or not me.admin then
-        print("Permission refusee : seul un administrateur peut changer le mot de passe d'un autre utilisateur.")
+    local ok, err = permissions.requirePrivileged("changing another user's password")
+    if not ok then
+        print(err)
         return
     end
     local user = users.find(target)
     if not user then
-        print("Utilisateur inconnu : " .. target)
+        print("Unknown user: " .. target)
         return
     end
-    write("Nouveau mot de passe pour " .. target .. " (vide pour aucun) : ")
+    write("New password for " .. target .. " (empty for none): ")
     local newPass = read("*")
-    write("Confirme : ")
+    write("Confirm: ")
     local confirm = read("*")
     if newPass ~= confirm then
-        print("Les mots de passe ne correspondent pas.")
+        print("Passwords don't match.")
         return
     end
     users.setPassword(target, newPass)
-    print("Mot de passe de '" .. target .. "' mis a jour.")
+    print("Password for '" .. target .. "' updated.")
     return
 end
 
 if not me then
-    print("Aucune session active (connecte via le shell de secours ?).")
+    print("No active session (logged in via the recovery shell?).")
     return
 end
 
 if me.password and me.password ~= "" then
-    write("Mot de passe actuel : ")
+    write("Current password: ")
     local current = read("*")
-    -- Utilise users.checkPassword pour gérer les mots de passe hachés
+    -- Use users.checkPassword to handle hashed passwords
     local users = dofile("/lib/users.lua")
     if not users.checkPassword(me.username, current) then
-        print("Mot de passe incorrect.")
+        print("Incorrect password.")
         return
     end
 end
 
-write("Nouveau mot de passe (vide pour aucun) : ")
+write("New password (empty for none): ")
 local newPass = read("*")
-write("Confirme : ")
+write("Confirm: ")
 local confirm = read("*")
 
 if newPass ~= confirm then
-    print("Les mots de passe ne correspondent pas.")
+    print("Passwords don't match.")
     return
 end
 
 users.setPassword(me.username, newPass)
-print("Mot de passe mis a jour.")
+print("Password updated.")

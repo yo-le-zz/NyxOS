@@ -1,5 +1,5 @@
--- /bin/find.lua : recherche des fichiers par nom (motif avec '*')
--- Usage : find [dossier] -name <motif>
+-- /bin/find.lua : searches for files by name (pattern with '*')
+-- Usage: find [folder] -name <pattern>
 
 local args = {...}
 local root = shell.dir()
@@ -17,7 +17,7 @@ while i <= #args do
 end
 
 if not pattern then
-    print("Usage : find [dossier] -name <motif>")
+    print("Usage: find [folder] -name <pattern>")
     return
 end
 

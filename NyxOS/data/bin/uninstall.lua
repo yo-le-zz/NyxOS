@@ -1,84 +1,90 @@
--- /bin/uninstall.lua : désinstallation complète de NyxOS
--- Interface graphique Basalt avec scan en temps réel
--- Usage : uninstall
+-- /bin/uninstall.lua : full NyxOS uninstallation
+-- Basalt graphical interface with real-time scanning
+-- Usage: uninstall
 
 local nyxlib = dofile("/lib/nyxlib.lua")
 local users = dofile("/lib/users.lua")
 
--- Essai multiple de chargement de Basalt
+-- Try multiple locations to load Basalt
 local basaltOk, basalt = pcall(dofile, "/lib/basalt.lua")
 if not basaltOk or not basalt then
-    -- Essai depuis le répertoire courant (pour tests depuis disk)
+    -- Try from the current directory (for tests run from disk)
     basaltOk, basalt = pcall(dofile, "data/lib/basalt.lua")
 end
 if not basaltOk or not basalt then
-    -- Essai depuis le chemin relatif
+    -- Try a relative path
     basaltOk, basalt = pcall(dofile, "../lib/basalt.lua")
 end
+if basaltOk and basalt then
+    local bridgeOk, bridge = pcall(dofile, "/lib/monitorbridge.lua")
+    if bridgeOk and bridge then
+        pcall(bridge.patch, basalt)
+    end
+end
 
--- Mode texte de secours si Basalt n'est pas disponible
-local function textMode()
+-- Fallback text mode if Basalt is unavailable
+local function textMode(...)
     local args = { ... }
     local forceMode = false
-    
+
     for _, arg in ipairs(args) do
         if arg == "--force" then
             forceMode = true
         end
     end
-    
-    -- Vérifie que NyxOS est installé
+
+    -- Check that NyxOS is installed
     if not fs.exists("/etc/nyx-release") then
-        print("NyxOS n'est pas installe sur cet ordinateur.")
+        print("NyxOS is not installed on this computer.")
         return
     end
-    
-    -- Affiche les informations de l'installation
+
+    -- Show install information
     local releaseFile = fs.open("/etc/nyx-release", "r")
     local releaseInfo = releaseFile.readAll()
     releaseFile.close()
-    
-    print("=== Désinstallation de NyxOS ===")
+
+    print("=== Uninstalling NyxOS ===")
     print("")
     print(releaseInfo)
     print("")
-    
+
     if not forceMode then
-        print("ATTENTION : Cette operation va supprimer COMPLETEMENT NyxOS.")
-        print("Les fichiers suivants seront supprimes :")
-        print("  - /bin/* (toutes les commandes NyxOS)")
-        print("  - /lib/* (toutes les bibliothèques NyxOS)")
-        print("  - /etc/* (configuration, utilisateurs)")
-        print("  - /home/* (tous les dossiers utilisateurs)")
-        print("  - /var/* (données temporaires)")
-        print("  - /startup.lua (script de démarrage)")
+        print("WARNING: This will COMPLETELY remove NyxOS.")
+        print("The following will be deleted:")
+        print("  - /bin/* (all NyxOS commands)")
+        print("  - /lib/* (all NyxOS libraries)")
+        print("  - /etc/* (configuration, users)")
+        print("  - /home/* (all user folders)")
+        print("  - /var/* (temporary data)")
+        print("  - /startup.lua (boot script)")
         print("")
-        print("L'ordinateur redémarrera en mode vanilla CC: Tweaked.")
+        print("The computer will reboot into vanilla CC: Tweaked.")
         print("")
-        
-        -- Liste les utilisateurs pour avertir
+
+        -- List users to warn about
         local userList = users.load()
         if #userList > 0 then
-            print("Utilisateurs qui seront supprimes :")
+            print("Users that will be deleted:")
             for _, u in ipairs(userList) do
                 local adminStr = u.admin and " (admin)" or ""
                 print("  - " .. u.username .. adminStr)
             end
             print("")
         end
-        
-        write("Confirmer la désinstallation ? (tapez 'oui' pour confirmer) : ")
+
+        write("Confirm uninstallation? (type 'yes' to confirm): ")
         local answer = read()
-        if answer ~= "oui" then
-            print("Désinstallation annulee.")
+        if answer ~= "yes" then
+            print("Uninstallation cancelled.")
             return
         end
     end
-    
+
     print("")
-    print("Suppression des fichiers...")
-    
-    -- Fonction pour supprimer récursivement un dossier
+    print("Deleting files...")
+
+    -- Recursively deletes a folder
     local function removeRecursive(path)
         if not fs.exists(path) then
             return
@@ -93,8 +99,8 @@ local function textMode()
             fs.delete(path)
         end
     end
-    
-    -- Supprime les dossiers NyxOS
+
+    -- Delete NyxOS folders
     local dirsToRemove = {
         "/bin",
         "/lib",
@@ -102,33 +108,33 @@ local function textMode()
         "/home",
         "/var",
     }
-    
+
     for _, dir in ipairs(dirsToRemove) do
         if fs.exists(dir) then
-            print("  Suppression de " .. dir .. "...")
+            print("  Deleting " .. dir .. "...")
             removeRecursive(dir)
         end
     end
-    
-    -- Supprime le startup.lua
+
+    -- Delete startup.lua
     if fs.exists("/startup.lua") then
-        print("  Suppression de /startup.lua...")
+        print("  Deleting /startup.lua...")
         fs.delete("/startup.lua")
     end
-    
-    -- Nettoie les fichiers restants à la racine qui pourraient appartenir à NyxOS
+
+    -- Clean up any remaining root files that might belong to NyxOS
     local rootFiles = fs.list("/")
-    local nyxFiles = {".DS_Store", "rom"} -- fichiers à préserver
+    local nyxFiles = {".DS_Store", "rom"} -- files to preserve
     for _, name in ipairs(rootFiles) do
         local path = "/" .. name
         if fs.isDir(path) then
-            -- Préserve les dossiers système CC: Tweaked
+            -- Preserve CC: Tweaked system folders
             if name ~= "rom" and name ~= ".DS_Store" then
-                print("  Suppression de " .. path .. "...")
+                print("  Deleting " .. path .. "...")
                 removeRecursive(path)
             end
         else
-            -- Préserve les fichiers système
+            -- Preserve system files
             local preserve = false
             for _, preserveName in ipairs(nyxFiles) do
                 if name == preserveName then
@@ -137,64 +143,64 @@ local function textMode()
                 end
             end
             if not preserve then
-                print("  Suppression de " .. path .. "...")
+                print("  Deleting " .. path .. "...")
                 fs.delete(path)
             end
         end
     end
-    
+
     print("")
-    print("Désinstallation terminee avec succes.")
+    print("Uninstallation completed successfully.")
     print("")
-    print("NyxOS a été completement supprime de cet ordinateur.")
-    print("L'ordinateur redémarrera en mode vanilla CC: Tweaked.")
+    print("NyxOS has been completely removed from this computer.")
+    print("The computer will reboot into vanilla CC: Tweaked.")
     print("")
-    print("Appuyez sur une touche pour redémarrer...")
+    print("Press any key to reboot...")
     os.pullEvent("key")
-    
-    print("Redémarrage...")
+
+    print("Rebooting...")
     os.reboot()
 end
 
--- Interface graphique Basalt
+-- Basalt graphical interface
 local function guiMode()
-    -- Vérifie que NyxOS est installé
+    -- Check that NyxOS is installed
     if not fs.exists("/etc/nyx-release") then
-        print("NyxOS n'est pas installe sur cet ordinateur.")
+        print("NyxOS is not installed on this computer.")
         return
     end
-    
+
     local palette = colors or colours
     local main = basalt.getMainFrame():setBackground(palette.black)
     local w, h = main:getWidth(), main:getHeight()
-    
-    -- Charge les informations de l'installation
+
+    -- Load install information
     local releaseFile = fs.open("/etc/nyx-release", "r")
     local releaseInfo = releaseFile.readAll()
     releaseFile.close()
-    
-    -- Charge la liste des utilisateurs
+
+    -- Load the user list
     local userList = users.load()
-    
-    -- Titre
+
+    -- Title
     main:addLabel()
-        :setText("Désinstallation de NyxOS")
+        :setText("Uninstalling NyxOS")
         :setForeground(palette.red)
         :setPosition(2, 2)
-    
-    -- Informations de l'installation
+
+    -- Install information
     local infoLabel = main:addLabel()
         :setText(releaseInfo)
         :setForeground(palette.lightGray)
         :setPosition(2, 4)
-    
-    -- Label de statut de scan
+
+    -- Scan status label
     local scanStatus = main:addLabel()
-        :setText("Scan des fichiers en cours...")
+        :setText("Scanning files...")
         :setForeground(palette.yellow)
         :setPosition(2, 7)
-    
-    -- Liste des fichiers/dossiers à supprimer
+
+    -- List of files/folders to delete
     local fileList = main:addList()
         :setPosition(2, 8)
         :setSize(w - 4, math.min(6, h - 18))
@@ -202,8 +208,8 @@ local function guiMode()
         :setForeground(palette.white)
         :setSelectedBackground(palette.blue)
         :setSelectedForeground(palette.white)
-    
-    -- Liste des utilisateurs
+
+    -- User list
     local userListDisplay = main:addList()
         :setPosition(2, 15)
         :setSize(w - 4, math.min(4, h - 22))
@@ -211,137 +217,137 @@ local function guiMode()
         :setForeground(palette.white)
         :setSelectedBackground(palette.purple)
         :setSelectedForeground(palette.white)
-    
-    -- Label d'avertissement
+
+    -- Warning label
     local warningLabel = main:addLabel()
-        :setText("ATTENTION: Cette operation est IRREVERSIBLE")
+        :setText("WARNING: This operation is IRREVERSIBLE")
         :setForeground(palette.red)
         :setPosition(2, h - 6)
-    
-    -- Boutons
+
+    -- Buttons
     local uninstallButton = main:addButton()
-        :setText("Désinstaller")
+        :setText("Uninstall")
         :setPosition(2, h - 2)
         :setSize(15, 1)
         :setBackground(palette.red)
         :setForeground(palette.white)
-    
+
     local cancelButton = main:addButton()
-        :setText("Annuler")
+        :setText("Cancel")
         :setPosition(19, h - 2)
         :setSize(12, 1)
         :setBackground(palette.gray)
         :setForeground(palette.white)
-    
-    -- Label de progression
+
+    -- Progress label
     local progressLabel = main:addLabel()
         :setText("")
         :setForeground(palette.green)
         :setPosition(w - 25, h - 2)
-    
-    -- Fonction pour scanner les fichiers
+
+    -- Scans the files
     local function scanFiles()
         fileList:clearItems()
-        scanStatus:setText("Scan des fichiers en cours...")
+        scanStatus:setText("Scanning files...")
         scanStatus:setForeground(palette.yellow)
         basalt.update()
-        sleep(0.5) -- Délai pour voir le scan en cours
-        
+        sleep(0.5) -- Delay so the scan is visible
+
         local items = {
-            "/bin/* (commandes)",
-            "/lib/* (bibliothèques)",
+            "/bin/* (commands)",
+            "/lib/* (libraries)",
             "/etc/* (configuration)",
-            "/home/* (utilisateurs)",
-            "/var/* (temporaire)",
-            "/startup.lua (démarrage)"
+            "/home/* (users)",
+            "/var/* (temporary)",
+            "/startup.lua (boot script)"
         }
-        
+
         for i, item in ipairs(items) do
             fileList:addItem(item)
         end
-        
-        scanStatus:setText("Scan termine - " .. #items .. " elements trouves")
+
+        scanStatus:setText("Scan complete - " .. #items .. " items found")
         scanStatus:setForeground(palette.green)
         basalt.update()
-        sleep(0.3) -- Délai pour voir le résultat
+        sleep(0.3) -- Delay so the result is visible
     end
-    
-    -- Fonction pour afficher les utilisateurs
+
+    -- Shows the users
     local function displayUsers()
         userListDisplay:clearItems()
-        
+
         if #userList > 0 then
             for _, u in ipairs(userList) do
                 local adminStr = u.admin and " [ADMIN]" or ""
                 userListDisplay:addItem(u.username .. adminStr)
             end
         else
-            userListDisplay:addItem("Aucun utilisateur")
+            userListDisplay:addItem("No users")
         end
     end
-    
-    -- Bouton Annuler
+
+    -- Cancel button
     cancelButton:onClick(function()
         basalt.stop()
-        print("Désinstallation annulee.")
+        print("Uninstallation cancelled.")
     end)
-    
-    -- Bouton Désinstaller
+
+    -- Uninstall button
     uninstallButton:onClick(function()
-        -- Fenêtre de confirmation finale
+        -- Final confirmation window
         local confirmWindow = basalt.createFrame()
             :setSize(40, 8)
             :setPosition(math.floor((w - 40) / 2), math.floor((h - 8) / 2))
             :setBackground(palette.gray)
-        
+
         confirmWindow:addLabel()
-            :setText("CONFIRMATION FINALE")
+            :setText("FINAL CONFIRMATION")
             :setForeground(palette.red)
             :setPosition(2, 2)
-        
+
         confirmWindow:addLabel()
-            :setText("Toutes les donnees seront PERDUES")
+            :setText("All data will be LOST")
             :setForeground(palette.white)
             :setPosition(2, 3)
-        
+
         confirmWindow:addLabel()
-            :setText("Tapez 'CONFIRMER' pour continuer:")
+            :setText("Type 'CONFIRM' to continue:")
             :setForeground(palette.yellow)
             :setPosition(2, 5)
-        
+
         local confirmInput = confirmWindow:addInput()
             :setPosition(2, 6)
             :setSize(36, 1)
             :setBackground(palette.darkGray)
             :setForeground(palette.white)
-        
+
         local confirmBtn = confirmWindow:addButton()
-            :setText("Confirmer")
+            :setText("Confirm")
             :setPosition(2, 7)
             :setSize(18, 1)
             :setBackground(palette.red)
             :setForeground(palette.white)
-        
+
         local cancelBtn = confirmWindow:addButton()
-            :setText("Annuler")
+            :setText("Cancel")
             :setPosition(22, 7)
             :setSize(16, 1)
             :setBackground(palette.gray)
             :setForeground(palette.white)
-        
+
         cancelBtn:onClick(function()
             confirmWindow:hide()
         end)
-        
+
         confirmBtn:onClick(function()
             local input = confirmInput:getText()
-            if input ~= "CONFIRMER" then
+            if input ~= "CONFIRM" then
                 return
             end
-            
+
             confirmWindow:hide()
-            
-            -- Désinstallation
+
+            -- Uninstall
             local function removeRecursive(path)
                 if not fs.exists(path) then
                     return
@@ -356,21 +362,21 @@ local function guiMode()
                     fs.delete(path)
                 end
             end
-            
+
             local dirsToRemove = {"/bin", "/lib", "/etc", "/home", "/var"}
-            
+
             for i, dir in ipairs(dirsToRemove) do
                 if fs.exists(dir) then
-                    progressLabel:setText("Suppression de " .. dir .. "...")
+                    progressLabel:setText("Deleting " .. dir .. "...")
                     removeRecursive(dir)
                 end
             end
-            
+
             if fs.exists("/startup.lua") then
-                progressLabel:setText("Suppression de /startup.lua...")
+                progressLabel:setText("Deleting /startup.lua...")
                 fs.delete("/startup.lua")
             end
-            
+
             local rootFiles = fs.list("/")
             for _, name in ipairs(rootFiles) do
                 local path = "/" .. name
@@ -385,34 +391,34 @@ local function guiMode()
                     end
                 end
             end
-            
-            progressLabel:setText("Termine!")
+
+            progressLabel:setText("Done!")
             progressLabel:setForeground(palette.green)
-            
+
             basalt.stop()
-            
+
             term.clear()
             term.setCursorPos(1, 1)
-            print("Désinstallation terminee avec succes.")
-            print("Redémarrage...")
+            print("Uninstallation completed successfully.")
+            print("Rebooting...")
             sleep(2)
             os.reboot()
         end)
-        
+
         confirmWindow:show()
         confirmInput:setFocused(true)
     end)
-    
+
     -- Initialisation
     scanFiles()
     displayUsers()
-    
+
     basalt.run()
 end
 
--- Point d'entrée principal
+-- Main entry point
 if not basaltOk or not basalt then
-    print("Basalt non disponible. Mode texte de secours.")
+    print("Basalt unavailable. Falling back to text mode.")
     textMode(...)
 else
     term.clear()

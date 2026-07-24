@@ -1,11 +1,11 @@
 -- /lib/display.lua
--- Gestion de l'affichage sur un ecran (moniteur) externe.
+-- Manages display output on an external screen (monitor).
 --
--- Detecte automatiquement un moniteur branche (peu importe le cote ou le
--- nom reseau via modem : "top", "left", "monitor_0", ...), determine s'il
--- s'agit d'un Advanced Monitor (couleur) ou d'un Monitor standard, puis
--- redirige le terminal dessus. Si aucun moniteur n'est trouve, NyxOS
--- continue d'utiliser l'ecran natif de l'ordinateur normalement.
+-- Automatically detects a connected monitor (regardless of which side or
+-- network name it's on: "top", "left", "monitor_0", ...), determines
+-- whether it's an Advanced Monitor (colour) or a standard Monitor, then
+-- redirects the terminal to it. If no monitor is found, NyxOS keeps using
+-- the computer's native screen as normal.
 
 local nyxdisplay = {}
 
@@ -34,9 +34,9 @@ end
 nyxdisplay.loadConfig = loadConfig
 nyxdisplay.saveConfig = saveConfig
 
--- Cherche un peripherique de type "monitor", quel que soit le cote ou le
--- nom reseau sur lequel il est connecte (detection automatique de la
--- position). Renvoie l'objet moniteur et son nom/cote.
+-- Looks for a "monitor"-type peripheral, regardless of which side or
+-- network name it's connected on (automatic position detection).
+-- Returns the monitor object and its name/side.
 function nyxdisplay.findMonitor()
     if not peripheral then
         return nil
@@ -52,9 +52,9 @@ function nyxdisplay.findMonitor()
     return nil
 end
 
--- Detecte le moniteur, l'initialise (echelle de texte, couleurs) et y
--- redirige le terminal courant. quiet=true evite les messages de log.
--- Renvoie ok, side, isAdvanced
+-- Detects the monitor, initialises it (text scale, colours) and
+-- redirects the current terminal to it. quiet=true suppresses log
+-- messages. Returns ok, side, isAdvanced
 function nyxdisplay.setup(quiet)
     local mon, name = nyxdisplay.findMonitor()
     if not mon then
@@ -87,8 +87,8 @@ function nyxdisplay.setup(quiet)
     term.setCursorPos(1, 1)
 
     if not quiet then
-        print("Ecran detecte : " .. name ..
-            (isAdvanced and " (Advanced Monitor)" or " (Monitor standard)"))
+        print("Screen detected: " .. name ..
+            (isAdvanced and " (Advanced Monitor)" or " (standard Monitor)"))
     end
 
     return true, name, isAdvanced

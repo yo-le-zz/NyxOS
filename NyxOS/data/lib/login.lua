@@ -1,14 +1,14 @@
--- /lib/login.lua : ecran de demarrage NyxOS
+-- /lib/login.lua : NyxOS boot screen
 --
--- 1) Menu de boot facon CloverOS (choix du mode de demarrage, avec
---    demarrage automatique apres un compte a rebours).
--- 2) Ecran de connexion multi-utilisateur (obligatoire pour entrer dans
---    le shell, sauf choix explicite du "shell de secours").
+-- 1) CloverOS-style boot menu (choose the boot mode, with automatic
+--    startup after a countdown).
+-- 2) Multi-user login screen (required to enter the shell, unless the
+--    "recovery shell" is explicitly chosen).
 --
--- Tout est fait avec la librairie Basalt (/lib/basalt.lua) pour une
--- interface graphique soignee. Si Basalt est absent ou plante pour une
--- raison quelconque, chaque etape retombe automatiquement sur un mode
--- texte simple : l'ordinateur ne doit jamais rester bloque au demarrage.
+-- Everything is built with the Basalt library (/lib/basalt.lua) for a
+-- polished graphical interface. If Basalt is missing or crashes for any
+-- reason, every step automatically falls back to a simple text mode:
+-- the computer must never get stuck at boot.
 
 local nyxlib = dofile("/lib/nyxlib.lua")
 local users  = dofile("/lib/users.lua")
@@ -22,14 +22,14 @@ local function loadBasalt()
 end
 
 ------------------------------------------------------------------
--- Menu de demarrage
+-- Boot menu
 ------------------------------------------------------------------
 
--- Version texte simple et fiable (pas de dependance a Basalt) : affiche
--- les options puis un simple read(), sans decompte automatique en
--- parallele (CC:Tweaked ne permet pas facilement de lire au clavier et
--- decompter en meme temps sans coroutines/parallel -- inutile de prendre
--- ce risque sur l'ecran de secours texte).
+-- Simple, reliable text version (no dependency on Basalt): shows the
+-- options then a plain read(), without an automatic parallel countdown
+-- (CC:Tweaked doesn't make it easy to read the keyboard and count down
+-- at the same time without coroutines/parallel -- not worth the risk on
+-- the text recovery screen).
 local function bootMenuTextSimple(accent)
     term.setBackgroundColor(palette.black)
     term.clear()
@@ -38,10 +38,10 @@ local function bootMenuTextSimple(accent)
     print("== NyxOS -- " .. nyxlib.getHostname() .. " ==")
     pcall(term.setTextColor, palette.white)
     print("")
-    print("1) Demarrer NyxOS (par defaut)")
-    print("2) Shell de secours (sans connexion)")
+    print("1) Start NyxOS (default)")
+    print("2) Recovery shell (no login)")
     print("")
-    write("Choix (Entree = demarrer normalement) : ")
+    write("Choice (Enter = start normally): ")
     local answer = read()
     if answer == "2" then
         return "recovery"
@@ -62,7 +62,7 @@ local function bootMenuBasalt(basalt, accent)
             :setPosition(math.max(1, cx - 2), math.max(1, cy - 5))
 
         main:addLabel()
-            :setText(nyxlib.getHostname() .. " -- choisis un mode de demarrage")
+            :setText(nyxlib.getHostname() .. " -- choose a boot mode")
             :setForeground(palette.lightGray)
             :setPosition(math.max(1, cx - 18), math.max(1, cy - 3))
 
@@ -73,11 +73,11 @@ local function bootMenuBasalt(basalt, accent)
             :setForeground(palette.white)
             :setSelectedBackground(accent)
             :setSelectedForeground(palette.black)
-            :addItem("Demarrer NyxOS")
-            :addItem("Shell de secours (sans connexion)")
+            :addItem("Start NyxOS")
+            :addItem("Recovery shell (no login)")
 
         local countdown = main:addLabel()
-            :setText("Demarrage automatique dans 5s -- Haut/Bas puis Entree")
+            :setText("Starting automatically in 5s -- Up/Down then Enter")
             :setForeground(palette.gray)
             :setPosition(math.max(1, cx - 25), math.min(h, cy + 3))
 
@@ -109,7 +109,7 @@ local function bootMenuBasalt(basalt, accent)
                 sleep(1)
                 remaining = remaining - 1
                 if remaining > 0 then
-                    countdown:setText("Demarrage automatique dans " .. remaining .. "s -- Haut/Bas puis Entree")
+                    countdown:setText("Starting automatically in " .. remaining .. "s -- Up/Down then Enter")
                 end
             end
             if not finished then
@@ -136,20 +136,20 @@ function login.bootMenu()
 end
 
 ------------------------------------------------------------------
--- Ecran de connexion
+-- Login screen
 ------------------------------------------------------------------
 
 local function loginText(accent)
     local list = users.load()
     if #list == 0 then
-        print("Aucun utilisateur configure. Cree un compte :")
-        write("Nom d'utilisateur : ")
+        print("No users configured. Create an account:")
+        write("Username: ")
         local name = read()
         while not name or name == "" do
-            write("Le nom ne peut pas etre vide. Nom d'utilisateur : ")
+            write("Name can't be empty. Username: ")
             name = read()
         end
-        write("Mot de passe (optionnel) : ")
+        write("Password (optional): ")
         local pass = read("*")
         users.add(name, pass, true)
         return name
@@ -162,7 +162,7 @@ local function loginText(accent)
         pcall(term.setTextColor, accent)
         print("NyxOS -- " .. nyxlib.getHostname())
         pcall(term.setTextColor, palette.white)
-        print("Utilisateurs : " .. table.concat((function()
+        print("Users: " .. table.concat((function()
             local names = {}
             for _, u in ipairs(list) do table.insert(names, u.username) end
             return names
@@ -172,7 +172,7 @@ local function loginText(accent)
         local name = read()
         local user = users.find(name or "")
         if not user then
-            print("Utilisateur inconnu.")
+            print("Unknown user.")
             sleep(1)
         else
             local ok = true
@@ -184,7 +184,7 @@ local function loginText(accent)
             if ok then
                 return user.username
             else
-                print("Mot de passe incorrect.")
+                print("Incorrect password.")
                 sleep(1)
             end
         end
@@ -194,7 +194,7 @@ end
 local function loginBasalt(basalt, accent)
     local list = users.load()
     if #list == 0 then
-        return nil -- pas d'utilisateur : on laisse le mode texte gerer la creation
+        return nil -- no users: let text mode handle account creation
     end
 
     local loggedUser = nil
@@ -209,7 +209,7 @@ local function loginBasalt(basalt, accent)
             :setPosition(math.max(1, cx - 12), math.max(1, cy - 6))
 
         main:addLabel()
-            :setText("Utilisateur :")
+            :setText("User:")
             :setForeground(palette.white)
             :setPosition(math.max(1, cx - 14), cy - 3)
 
@@ -225,7 +225,7 @@ local function loginBasalt(basalt, accent)
         end
 
         local passLabel = main:addLabel()
-            :setText("Mot de passe :")
+            :setText("Password:")
             :setForeground(palette.white)
             :setPosition(math.max(1, cx - 14), cy + math.min(6, #list) + 1)
 
@@ -237,7 +237,7 @@ local function loginBasalt(basalt, accent)
             :setReplaceChar("*")
 
         local status = main:addLabel()
-            :setText("Selectionne ton utilisateur, entre le mot de passe puis valide.")
+            :setText("Select your user, enter your password, then confirm.")
             :setForeground(palette.lightGray)
             :setPosition(math.max(1, cx - 25), cy + math.min(6, #list) + 4)
 
@@ -252,7 +252,7 @@ local function loginBasalt(basalt, accent)
                 loggedUser = selected.username
                 basalt.stop()
             else
-                status:setText("Mot de passe incorrect, reessaie.")
+                status:setText("Incorrect password, try again.")
                 pcall(function() passInput:setText("") end)
             end
         end
@@ -264,7 +264,7 @@ local function loginBasalt(basalt, accent)
         end)
 
         local loginButton = main:addButton()
-            :setText("Se connecter")
+            :setText("Log in")
             :setPosition(math.max(1, cx - 8), cy + math.min(6, #list) + 6)
             :setSize(16, 1)
             :setBackground(accent)
@@ -280,7 +280,7 @@ local function loginBasalt(basalt, accent)
     return loggedUser
 end
 
--- Renvoie le nom de l'utilisateur connecte.
+-- Returns the username of the logged in user.
 function login.authenticate()
     local accent = theme.accent()
     local basalt = loadBasalt()
@@ -289,8 +289,8 @@ function login.authenticate()
         if name then
             return name
         end
-        -- Basalt a plante, ou aucun utilisateur n'existe encore : on
-        -- retombe sur le mode texte pour ne jamais bloquer le demarrage.
+        -- Basalt crashed, or no users exist yet: fall back to text mode
+        -- so boot never gets stuck.
     end
     return loginText(accent)
 end

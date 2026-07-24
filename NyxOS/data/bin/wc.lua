@@ -1,17 +1,17 @@
--- /bin/wc.lua : compte lignes/mots/caracteres d'un fichier
--- Usage : wc <fichier>
+-- /bin/wc.lua : counts lines/words/characters in a file
+-- Usage: wc <file>
 
 local args = {...}
 local file = args[1]
 
 if not file then
-    print("Usage : wc <fichier>")
+    print("Usage: wc <file>")
     return
 end
 
 local path = shell.resolve(file)
 if not fs.exists(path) or fs.isDir(path) then
-    print("wc : fichier introuvable : " .. file)
+    print("wc: file not found: " .. file)
     return
 end
 

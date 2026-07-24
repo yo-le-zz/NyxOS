@@ -1,18 +1,34 @@
--- /startup.lua : demarrage de NyxOS (execute a chaque boot)
+-- /startup.lua : NyxOS boot script (runs on every boot)
 
-shell.setPath(shell.path() .. ":/bin")
+-- NyxOS commands take priority over any same-named ROM program (needed
+-- so our own /bin/shutdown.lua, /bin/reboot.lua, etc. are the ones that
+-- actually run).
+shell.setPath("/bin:" .. shell.path())
 
--- Redirige l'affichage vers un ecran (moniteur) branche, si un est trouve,
--- peu importe le cote ou le nom reseau (detection automatique de la
--- position), et adapte l'echelle de texte selon Advanced Monitor (couleur)
--- ou Monitor standard. Si aucun ecran n'est detecte, NyxOS continue
--- normalement sur l'ecran natif de l'ordinateur.
+-- Fake /dev/null and /dev/zero (see /lib/nyxlib.lua)
+local nyxlibEarlyOk, nyxlibEarly = pcall(dofile, "/lib/nyxlib.lua")
+if nyxlibEarlyOk and nyxlibEarly then
+    pcall(nyxlibEarly.installDevFs)
+end
+
+-- Ensures /var/tmp and /var/apt/tmp exist (see /bin/shutdown.lua for the
+-- matching cleanup on the way out).
+pcall(function() dofile("/lib/tmp.lua").ensure() end)
+
+-- Generates the persistent machine identity on first boot.
+pcall(function() dofile("/lib/machineid.lua").get() end)
+
+-- Redirects display to a connected screen (monitor), if one is found,
+-- regardless of which side or network name it's on (automatic position
+-- detection), and adapts the text scale for Advanced Monitor (colour)
+-- vs standard Monitor. If no screen is detected, NyxOS continues
+-- normally on the computer's native screen.
 local displayOk, nyxdisplay = pcall(dofile, "/lib/display.lua")
 if displayOk and nyxdisplay then
     pcall(nyxdisplay.setup, true)
 end
 
--- Enregistre l'heure de demarrage pour la commande "uptime"
+-- Records the boot time for the "uptime" command
 if not fs.exists("/var/run") then
     fs.makeDir("/var/run")
 end
@@ -20,10 +36,15 @@ local bootFile = fs.open("/var/run/boot.time", "w")
 bootFile.write(tostring(os.epoch("utc")))
 bootFile.close()
 
--- Menu de demarrage + connexion (facon CloverOS). Tout est fait dans
--- /lib/login.lua avec Basalt et un repli texte automatique : si quoi que
--- ce soit echoue ici, l'ordinateur continue quand meme vers le shell
--- plutot que de rester bloque.
+local loggerOk, logger = pcall(dofile, "/lib/logger.lua")
+if loggerOk and logger then
+    pcall(logger.info, "boot", "NyxOS starting up")
+end
+
+-- Boot menu + login (CloverOS-style). Everything happens in
+-- /lib/login.lua with Basalt and an automatic text fallback: if
+-- anything fails here, the computer still reaches the shell instead of
+-- getting stuck.
 local mode = "boot"
 local loginOk, nyxlogin = pcall(dofile, "/lib/login.lua")
 if loginOk and nyxlogin then
@@ -36,7 +57,9 @@ if loginOk and nyxlogin then
         term.setBackgroundColor((colors or colours).black)
         term.clear()
         term.setCursorPos(1, 1)
-        print("=== Shell de secours NyxOS (aucune connexion) ===")
+        print("=== NyxOS recovery shell (no login) ===")
+        print("Type 'recovery' to repair system files, or 'shell' for the")
+        print("plain CraftOS shell if NyxOS itself won't load.")
     else
         local authOk, username = pcall(nyxlogin.authenticate)
         if authOk and username then
@@ -56,13 +79,30 @@ if fs.exists("/etc/motd") then
     f.close()
 end
 
--- Lancer le shell graphique avec Basalt (repli texte si indisponible)
-local shelluiOk, shellui = pcall(dofile, "/lib/shellui.lua")
-if shelluiOk and shellui then
-    local runOk, success = pcall(shellui.run)
-    if not runOk or success == false then
-        shellui.runTextFallback()
+-- The actual interactive shell: graphical (Basalt) with an automatic
+-- text fallback if it's unavailable/disabled.
+local function runInteractiveShell()
+    local shelluiOk, shellui = pcall(dofile, "/lib/shellui.lua")
+    if shelluiOk and shellui then
+        local runOk, success = pcall(shellui.run)
+        if not runOk or success == false then
+            shellui.runTextFallback()
+        end
+    else
+        shell.run("/bin/shell")
+    end
+end
+
+-- Runs the shell alongside every autostart service (a tiny init system
+-- -- see /lib/services.lua). If the service manager itself fails to
+-- load for any reason, fall back to just running the shell directly so
+-- boot never gets stuck.
+local servicesOk, services = pcall(dofile, "/lib/services.lua")
+if servicesOk and services then
+    local ok, err = pcall(services.runWithShell, runInteractiveShell)
+    if not ok then
+        runInteractiveShell()
     end
 else
-    shell.run("/bin/shell")
+    runInteractiveShell()
 end

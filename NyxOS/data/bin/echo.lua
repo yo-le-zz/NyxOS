@@ -1,4 +1,4 @@
--- /bin/echo.lua : affiche le texte donne
+-- /bin/echo.lua : prints the given text
 
 local args = {...}
 print(table.concat(args, " "))

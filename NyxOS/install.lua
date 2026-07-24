@@ -1,14 +1,16 @@
--- install.lua : installeur / metteur a jour de NyxOS
--- Place install.lua et le dossier data/ cote a cote, puis lance : install
+-- install.lua : NyxOS installer / updater
+-- Place install.lua and the data/ folder side by side, then run: install
 --
--- Si NyxOS est deja installe, les fichiers systeme sont mis a jour
--- en preservant utilisateurs, configuration et /home.
+-- If NyxOS is already installed, system files are updated while
+-- preserving users, configuration and /home. If NyxOS looks partially
+-- installed/broken, a Recovery option repairs system files without
+-- touching your data (see also the standalone `recovery` command).
 
-local VERSION = "1.0.0"
+local VERSION = "1.0.1"
 local palette = colors or colours
 
 ------------------------------------------------------------------
--- Utilitaires
+-- Utilities
 ------------------------------------------------------------------
 
 local function getInstallDir()
@@ -49,6 +51,11 @@ local function loadBasalt(dataDir)
         if fs.exists(path) then
             local ok, mod = pcall(dofile, path)
             if ok and type(mod) == "table" and mod.getMainFrame then
+                local bridgePath = dataDir and fs.combine(dataDir, "lib/monitorbridge.lua") or "/lib/monitorbridge.lua"
+                local bridgeOk, bridge = pcall(dofile, fs.exists(bridgePath) and bridgePath or "/lib/monitorbridge.lua")
+                if bridgeOk and bridge then
+                    pcall(bridge.patch, mod)
+                end
                 return mod
             end
         end
@@ -56,16 +63,35 @@ local function loadBasalt(dataDir)
     return nil
 end
 
+-- Detects a connected monitor and redirects the terminal to it *before*
+-- the wizard runs, so both the text and the Basalt install screens
+-- render on the external screen (not just the computer's own terminal)
+-- when one is present. Falls back silently to the computer terminal if
+-- no monitor is found.
+local function setupScreen(dataDir)
+    local displayPath = dataDir and fs.combine(dataDir, "lib/display.lua") or "/lib/display.lua"
+    if not fs.exists(displayPath) then
+        displayPath = "/lib/display.lua"
+    end
+    if not fs.exists(displayPath) then
+        return
+    end
+    local ok, nyxdisplay = pcall(dofile, displayPath)
+    if ok and nyxdisplay then
+        pcall(nyxdisplay.setup, true)
+    end
+end
+
 local function loadThemePresets(dataDir)
     local defaults = {
-        { name = "Violet Nyx",      accent = palette.purple },
-        { name = "Bleu Ocean",      accent = palette.blue },
-        { name = "Cyan",            accent = palette.cyan },
-        { name = "Vert Foret",      accent = palette.green },
-        { name = "Orange Couchant", accent = palette.orange },
-        { name = "Rouge Cramoisi",  accent = palette.red },
-        { name = "Magenta",         accent = palette.magenta },
-        { name = "Gris Classique",  accent = palette.lightGray },
+        { name = "Nyx Violet",     accent = palette.purple },
+        { name = "Ocean Blue",     accent = palette.blue },
+        { name = "Cyan",           accent = palette.cyan },
+        { name = "Forest Green",   accent = palette.green },
+        { name = "Sunset Orange",  accent = palette.orange },
+        { name = "Crimson Red",    accent = palette.red },
+        { name = "Magenta",        accent = palette.magenta },
+        { name = "Classic Grey",   accent = palette.lightGray },
     }
     if dataDir then
         local themePath = fs.combine(dataDir, "lib/theme.lua")
@@ -83,12 +109,27 @@ local function isInstalled()
     return fs.exists("/etc/nyx-release") or fs.exists("/startup.lua")
 end
 
+-- Heuristic: NyxOS looks *partially* installed (some core pieces
+-- present, others missing) -- a good sign something broke, and the
+-- wizard should offer Recovery instead of a blind update.
+local function looksBroken()
+    if not isInstalled() then
+        return false
+    end
+    local expected = { "/startup.lua", "/lib/nyxlib.lua", "/lib/users.lua", "/bin/apt.lua", "/etc/passwd" }
+    local missing = 0
+    for _, p in ipairs(expected) do
+        if not fs.exists(p) then missing = missing + 1 end
+    end
+    return missing > 0 and missing < #expected
+end
+
 local function getInstalledVersion()
     if not fs.exists("/etc/nyx-release") then
-        return "inconnue"
+        return "unknown"
     end
     local f = fs.open("/etc/nyx-release", "r")
-    local line = f.readLine() or "inconnue"
+    local line = f.readLine() or "unknown"
     f.close()
     return line
 end
@@ -129,23 +170,26 @@ end
 local function writeRelease()
     local f = fs.open("/etc/nyx-release", "w")
     f.write("NyxOS " .. VERSION .. "\n")
-    f.write("Installe le " .. os.date("%d/%m/%Y %H:%M:%S") .. "\n")
+    f.write("Installed on " .. os.date("%d/%m/%Y %H:%M:%S") .. "\n")
     f.close()
 end
 
--- Fichiers /etc a ne pas ecraser lors d'une mise a jour
+-- /etc files that must never be overwritten by an update/recovery
 local UPDATE_SKIP = {
     ["/etc/passwd"] = true,
     ["/etc/hostname"] = true,
     ["/etc/nyx-theme.lua"] = true,
     ["/etc/nyx-display.lua"] = true,
+    ["/etc/nyx-config.lua"] = true,
     ["/etc/encrypt-config.lua"] = true,
     ["/etc/nyx-release"] = true,
     ["/etc/apt/installed.lua"] = true,
+    ["/etc/machine-id"] = true,
+    ["/etc/sudoers.lua"] = true,
 }
 
 local function deployFiles(dataDir, isUpdate)
-    print(isUpdate and "Mise a jour des fichiers systeme..." or "Installation des fichiers...")
+    print(isUpdate and "Updating system files..." or "Installing files...")
 
     ensureDir("/bin")
     ensureDir("/lib")
@@ -155,6 +199,7 @@ local function deployFiles(dataDir, isUpdate)
 
     copyTree(fs.combine(dataDir, "bin"), "/bin")
     copyTree(fs.combine(dataDir, "lib"), "/lib")
+    copyTree(fs.combine(dataDir, "etc/services"), "/etc/services")
 
     copyFile(fs.combine(dataDir, "startup.lua"), "/startup.lua")
 
@@ -184,13 +229,13 @@ local function applyConfig(config)
     local theme = dofile("/lib/theme.lua")
 
     nyxlib.setHostname(config.hostname)
-
     theme.save({ name = config.themeName, accent = config.accent })
+    nyxlib.saveTable("/etc/nyx-config.lua", { gui = config.gui ~= false })
 
     if users.count() == 0 then
         local ok, err = users.add(config.username, config.password, true)
         if not ok then
-            print("Erreur creation utilisateur : " .. tostring(err))
+            print("Error creating user: " .. tostring(err))
             return false
         end
     end
@@ -199,65 +244,76 @@ local function applyConfig(config)
 end
 
 ------------------------------------------------------------------
--- Assistant texte
+-- Text wizard
 ------------------------------------------------------------------
 
-local function wizardText(presets, isUpdate)
+local function askYesNo(prompt)
+    write(prompt)
+    local answer = read()
+    return answer == "y" or answer == "Y" or answer == "yes"
+end
+
+local function wizardText(presets, mode)
     term.setBackgroundColor(palette.black)
     term.clear()
     term.setCursorPos(1, 1)
 
-    if isUpdate then
-        print("=== Mise a jour de NyxOS ===")
+    if mode == "update" or mode == "recovery" then
+        print(mode == "recovery" and "=== NyxOS Recovery ===" or "=== NyxOS Update ===")
         print("")
-        print("Version installee : " .. getInstalledVersion())
-        print("Nouvelle version  : NyxOS " .. VERSION)
+        print("Installed version : " .. getInstalledVersion())
+        print("New version       : NyxOS " .. VERSION)
         print("")
-        print("Les utilisateurs et la configuration seront preserves.")
+        if mode == "recovery" then
+            print("NyxOS looks partially installed or damaged.")
+            print("Recovery repairs system files (/bin, /lib, /startup.lua)")
+            print("without touching your users, config, or /home.")
+        else
+            print("Users and configuration will be preserved.")
+        end
         print("")
-        write("Continuer la mise a jour ? (o/n) : ")
-        local answer = read()
-        if answer ~= "o" and answer ~= "O" and answer ~= "oui" then
-            print("Mise a jour annulee.")
+        if not askYesNo((mode == "recovery" and "Run recovery" or "Continue the update") .. "? (y/n): ") then
+            print("Cancelled.")
             return nil
         end
-        return { update = true }
+        return { update = true, recovery = (mode == "recovery") }
     end
 
-    print("=== Installation de NyxOS " .. VERSION .. " ===")
+    print("=== Installing NyxOS " .. VERSION .. " ===")
     print("")
 
-    write("Nom d'utilisateur (admin) : ")
+    write("Username (admin): ")
     local username = read()
     while not username or username == "" do
-        write("Le nom ne peut pas etre vide. Nom d'utilisateur : ")
+        write("Name can't be empty. Username: ")
         username = read()
     end
 
-    write("Mot de passe (optionnel, Entree = aucun) : ")
+    write("Password (optional, Enter = none): ")
     local password = read("*")
 
-    write("Nom de l'ordinateur [" .. tostring(os.getComputerLabel() or "nyxos") .. "] : ")
+    write("Computer name [" .. tostring(os.getComputerLabel() or "nyxos") .. "]: ")
     local hostname = read()
     if not hostname or hostname == "" then
         hostname = os.getComputerLabel() or "nyxos"
     end
 
     print("")
-    print("Couleur d'accent :")
+    print("Accent colour:")
     for i, p in ipairs(presets) do
         print("  " .. i .. ") " .. p.name)
     end
-    write("Choix [1] : ")
+    write("Choice [1]: ")
     local choice = tonumber(read()) or 1
     if choice < 1 or choice > #presets then choice = 1 end
     local preset = presets[choice]
 
     print("")
-    write("Confirmer l'installation ? (o/n) : ")
-    local confirm = read()
-    if confirm ~= "o" and confirm ~= "O" and confirm ~= "oui" then
-        print("Installation annulee.")
+    local gui = askYesNo("Install the graphical interface (Basalt)? (y/n) [y]: ")
+
+    print("")
+    if not askYesNo("Confirm installation? (y/n): ") then
+        print("Installation cancelled.")
         return nil
     end
 
@@ -268,15 +324,16 @@ local function wizardText(presets, isUpdate)
         hostname = hostname,
         themeName = preset.name,
         accent = preset.accent,
+        gui = gui,
     }
 end
 
 ------------------------------------------------------------------
--- Assistant Basalt
+-- Basalt wizard
 ------------------------------------------------------------------
 
-local function wizardBasalt(basalt, presets, isUpdate)
-    local result = nil -- nil = echec, false = annule, table = ok
+local function wizardBasalt(basalt, presets, mode)
+    local result = nil -- nil = failed, false = cancelled, table = ok
     local accent = presets[1].accent
 
     local ok = pcall(function()
@@ -284,40 +341,42 @@ local function wizardBasalt(basalt, presets, isUpdate)
         local w, h = main:getWidth(), main:getHeight()
         local cx = math.floor(w / 2)
 
-        if isUpdate then
+        if mode == "update" or mode == "recovery" then
             main:addLabel()
-                :setText("Mise a jour NyxOS")
+                :setText(mode == "recovery" and "NyxOS Recovery" or "NyxOS Update")
                 :setForeground(accent)
                 :setPosition(math.max(1, cx - 8), 2)
 
             main:addLabel()
-                :setText("Version actuelle : " .. getInstalledVersion())
+                :setText("Current version: " .. getInstalledVersion())
                 :setForeground(palette.white)
                 :setPosition(2, 5)
 
             main:addLabel()
-                :setText("Nouvelle version : NyxOS " .. VERSION)
+                :setText("New version: NyxOS " .. VERSION)
                 :setForeground(palette.lightGray)
                 :setPosition(2, 7)
 
             main:addLabel()
-                :setText("Utilisateurs et configuration preserves.")
+                :setText(mode == "recovery"
+                    and "Repairs system files only. Users/config kept."
+                    or "Users and configuration are preserved.")
                 :setForeground(palette.gray)
                 :setPosition(2, 10)
 
             main:addButton()
-                :setText("Mettre a jour")
+                :setText(mode == "recovery" and "Run recovery" or "Update")
                 :setPosition(math.max(1, cx - 8), h - 4)
                 :setSize(16, 1)
                 :setBackground(accent)
                 :setForeground(palette.black)
                 :onClick(function()
-                    result = { update = true }
+                    result = { update = true, recovery = (mode == "recovery") }
                     basalt.stop()
                 end)
 
             main:addButton()
-                :setText("Annuler")
+                :setText("Cancel")
                 :setPosition(math.max(1, cx - 8), h - 2)
                 :setSize(16, 1)
                 :setBackground(palette.gray)
@@ -329,13 +388,13 @@ local function wizardBasalt(basalt, presets, isUpdate)
         else
             local y = 2
             main:addLabel()
-                :setText("Installation NyxOS " .. VERSION)
+                :setText("Installing NyxOS " .. VERSION)
                 :setForeground(accent)
                 :setPosition(math.max(1, cx - 10), y)
             y = y + 3
 
             main:addLabel()
-                :setText("Utilisateur (admin) :")
+                :setText("User (admin):")
                 :setForeground(palette.white)
                 :setPosition(2, y)
             local userInput = main:addInput()
@@ -346,7 +405,7 @@ local function wizardBasalt(basalt, presets, isUpdate)
             y = y + 3
 
             main:addLabel()
-                :setText("Mot de passe (optionnel) :")
+                :setText("Password (optional):")
                 :setForeground(palette.white)
                 :setPosition(2, y)
             local passInput = main:addInput()
@@ -358,7 +417,7 @@ local function wizardBasalt(basalt, presets, isUpdate)
             y = y + 3
 
             main:addLabel()
-                :setText("Nom de l'ordinateur :")
+                :setText("Computer name:")
                 :setForeground(palette.white)
                 :setPosition(2, y)
             local hostInput = main:addInput()
@@ -370,7 +429,7 @@ local function wizardBasalt(basalt, presets, isUpdate)
             y = y + 3
 
             main:addLabel()
-                :setText("Couleur d'accent :")
+                :setText("Accent colour:")
                 :setForeground(palette.white)
                 :setPosition(2, y)
             local themeList = main:addList()
@@ -383,6 +442,12 @@ local function wizardBasalt(basalt, presets, isUpdate)
             for _, p in ipairs(presets) do
                 themeList:addItem(p.name)
             end
+            y = y + math.min(#presets, 5) + 1
+
+            local guiCheckbox = main:addCheckBox()
+                :setPosition(2, y)
+                :setChecked(true)
+                :setText("Install graphical interface (Basalt)")
 
             local selectedTheme = 1
             themeList:onSelect(function(self, index)
@@ -390,19 +455,22 @@ local function wizardBasalt(basalt, presets, isUpdate)
             end)
 
             local status = main:addLabel()
-                :setText("Remplis les champs puis valide.")
+                :setText("Fill in the fields, then confirm.")
                 :setForeground(palette.lightGray)
                 :setPosition(2, h - 4)
 
             local function submit()
                 local username = userInput:getText()
                 if not username or username == "" then
-                    status:setText("Le nom d'utilisateur est obligatoire.")
+                    status:setText("Username is required.")
                     return
                 end
                 local selected = selectedTheme
                 if selected < 1 or selected > #presets then selected = 1 end
                 local preset = presets[selected]
+                local gui = true
+                local okChk, checked = pcall(function() return guiCheckbox:getChecked() end)
+                if okChk then gui = checked end
                 result = {
                     update = false,
                     username = username,
@@ -410,12 +478,13 @@ local function wizardBasalt(basalt, presets, isUpdate)
                     hostname = hostInput:getText() or "nyxos",
                     themeName = preset.name,
                     accent = preset.accent,
+                    gui = gui,
                 }
                 basalt.stop()
             end
 
             main:addButton()
-                :setText("Installer")
+                :setText("Install")
                 :setPosition(math.max(1, cx - 8), h - 2)
                 :setSize(16, 1)
                 :setBackground(accent)
@@ -438,42 +507,49 @@ local function wizardBasalt(basalt, presets, isUpdate)
 end
 
 ------------------------------------------------------------------
--- Point d'entree
+-- Entry point
 ------------------------------------------------------------------
 
 local function main()
     local dataDir = findDataDir()
     if not dataDir then
-        print("Erreur : dossier data/ introuvable.")
-        print("Place install.lua et le dossier data/ dans le meme repertoire.")
+        print("Error: data/ folder not found.")
+        print("Place install.lua and the data/ folder in the same directory.")
         return
     end
 
-    local updateMode = isInstalled()
+    setupScreen(dataDir)
+
+    local alreadyInstalled = isInstalled()
+    local mode = "install"
+    if alreadyInstalled then
+        mode = looksBroken() and "recovery" or "update"
+    end
+
     local presets = loadThemePresets(dataDir)
     local basalt = loadBasalt(dataDir)
 
     local config
     if basalt then
-        config = wizardBasalt(basalt, presets, updateMode)
+        config = wizardBasalt(basalt, presets, mode)
         if config == false then
-            print("Operation annulee.")
+            print("Cancelled.")
             return
         end
     else
-        print("Basalt indisponible, mode texte.")
+        print("Basalt unavailable, using text mode.")
     end
     if not config then
-        config = wizardText(presets, updateMode)
+        config = wizardText(presets, mode)
     end
 
     if not config then
         return
     end
 
-    deployFiles(dataDir, config.update or updateMode)
+    deployFiles(dataDir, config.update or alreadyInstalled)
 
-    if not config.update and not updateMode then
+    if not config.update and not alreadyInstalled then
         if not applyConfig(config) then
             return
         end
@@ -482,14 +558,16 @@ local function main()
     term.setBackgroundColor(palette.black)
     term.clear()
     term.setCursorPos(1, 1)
-    if config.update or updateMode then
-        print("Mise a jour terminee ! NyxOS " .. VERSION .. " est pret.")
+    if config.recovery then
+        print("Recovery complete! NyxOS " .. VERSION .. " system files repaired.")
+    elseif config.update or alreadyInstalled then
+        print("Update complete! NyxOS " .. VERSION .. " is ready.")
     else
-        print("Installation terminee ! NyxOS " .. VERSION .. " est pret.")
-        print("Premier compte : " .. config.username .. " (administrateur)")
+        print("Installation complete! NyxOS " .. VERSION .. " is ready.")
+        print("First account: " .. config.username .. " (administrator)")
     end
     print("")
-    print("Redemarrez l'ordinateur : reboot")
+    print("Reboot the computer: reboot")
 end
 
 main()
