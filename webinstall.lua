@@ -4,13 +4,14 @@
 -- Downloads install.lua and the data/ folder from GitHub, then runs the
 -- installer/updater if NyxOS is already present.
 
-local VERSION = "1.0.1"
+local VERSION = "1.0.2"
 local REPO_BASE = "https://raw.githubusercontent.com/yo-le-zz/NyxOS/main/NyxOS"
 local palette = colors or colours
 
 -- Files to download (relative to NyxOS/)
 local FILES = {
     "install.lua",
+    "boot.json",
     "data/startup.lua",
     "data/etc/motd",
     "data/etc/apt/installed.lua",
@@ -18,6 +19,7 @@ local FILES = {
     "data/lib/basalt.lua",
     "data/lib/crypto.lua",
     "data/lib/db.lua",
+    "data/lib/desktop.lua",
     "data/lib/display.lua",
     "data/lib/login.lua",
     "data/lib/logger.lua",
@@ -25,6 +27,7 @@ local FILES = {
     "data/lib/monitorbridge.lua",
     "data/lib/network.lua",
     "data/lib/nyxapi.lua",
+    "data/lib/nyxscript.lua",
     "data/lib/nyxlib.lua",
     "data/lib/permissions.lua",
     "data/lib/services.lua",
@@ -40,6 +43,7 @@ local FILES = {
     "data/bin/curl.lua",
     "data/bin/date.lua",
     "data/bin/db.lua",
+    "data/bin/dd.lua",
     "data/bin/deluser.lua",
     "data/bin/df.lua",
     "data/bin/diagbasalt.lua",
@@ -58,11 +62,13 @@ local FILES = {
     "data/bin/net.lua",
     "data/bin/neofetch.lua",
     "data/bin/newterm.lua",
+    "data/bin/nyx.lua",
     "data/bin/passwd.lua",
     "data/bin/pwd.lua",
     "data/bin/reboot.lua",
     "data/bin/recovery.lua",
     "data/bin/reset.lua",
+    "data/bin/rm.lua",
     "data/bin/service.lua",
     "data/bin/shutdown.lua",
     "data/bin/sudo.lua",

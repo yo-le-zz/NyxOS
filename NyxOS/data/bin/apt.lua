@@ -426,12 +426,12 @@ local function cmdInstall(source, variantArg)
         end
 
         local installerRel = variantDef.installer or (variant .. "/install.lua")
-        installerRel = (installerRel:gsub("^" .. variant .. "/", ""))
         local installerPath = fs.combine(tmpDir, installerRel)
         if not fs.exists(installerPath) then
-            -- installer path in app.json is relative to the package
-            -- root (e.g. "client/install.lua") -- try that directly too.
-            installerPath = fs.combine(tmpDir, fs.getName(variantDef.installer or "install.lua"))
+            -- Some packages give `installer` relative to the variant
+            -- folder itself (e.g. "install.lua" instead of
+            -- "client/install.lua") -- try that layout too.
+            installerPath = fs.combine(fs.combine(tmpDir, variant), fs.getName(installerRel))
         end
         if not fs.exists(installerPath) then
             print("apt: installer not found at " .. tostring(variantDef.installer))
@@ -441,6 +441,26 @@ local function cmdInstall(source, variantArg)
         if app.description then print("  " .. app.description) end
         if app.author then print("  by " .. app.author) end
 
+        -- The variant's uninstall.lua (if any) only exists inside tmpDir,
+        -- which is wiped once install finishes -- persist a copy so
+        -- 'apt remove/purge' can still run it later.
+        local persistedUninstaller = nil
+        local uninstallerRel = variantDef.uninstaller
+        if uninstallerRel then
+            local uninstallerPath = fs.combine(tmpDir, uninstallerRel)
+            if not fs.exists(uninstallerPath) then
+                uninstallerPath = fs.combine(fs.combine(tmpDir, variant), fs.getName(uninstallerRel))
+            end
+            if fs.exists(uninstallerPath) then
+                if not fs.exists("/var/apt/uninstallers") then
+                    fs.makeDir("/var/apt/uninstallers")
+                end
+                persistedUninstaller = "/var/apt/uninstallers/" .. pkgName .. ".lua"
+                if fs.exists(persistedUninstaller) then fs.delete(persistedUninstaller) end
+                fs.copy(uninstallerPath, persistedUninstaller)
+            end
+        end
+
         runInstaller(pkgName, installerPath, {
             source = "nyxapps:" .. app._folder,
             version = app.version,
@@ -448,6 +468,7 @@ local function cmdInstall(source, variantArg)
             author = app.author,
             variant = variant,
             registryFolder = app._folder,
+            uninstallScript = persistedUninstaller,
         })
         fs.delete(tmpDir)
         return

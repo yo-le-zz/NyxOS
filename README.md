@@ -1,10 +1,10 @@
 # 🚀 NyxOS
 
-> ⚠️ **Current version: 1.0.1**
+> ⚠️ **Current version: 1.0.2**
 >
-> This release builds on NyxOS's first version with a much larger command
-> set (sudo, services, networking, a mini database, logging...). Some
-> larger features are still in progress -- see [Roadmap](#-roadmap) below.
+> Adds a graphical desktop, boot.json + disk installs (chainloaded via
+> the separate [NyxLoader](https://github.com/yo-le-zz/NyxLoader) project),
+> `rm`/`dd`, and a round of real bug fixes. See CHANGELOG.md for details.
 
 **NyxOS** is a mini operating system for **CC: Tweaked (Minecraft)**,
 heavily inspired by the Unix/Ubuntu layout (`/home`, `/bin`, `/etc`,
@@ -263,6 +263,31 @@ reset                # removes every apt-installed package, keeps the base OS
 recovery              # repairs core system files from GitHub, keeps your data
 ```
 
+### 🖥️ `desktop` -- graphical desktop
+```bash
+desktop            # launch the desktop
+guimode desktop    # make it the default boot UI
+```
+Taskbar (Start menu, clock), desktop icons, a Windows-style file
+explorer, an embedded terminal, an `apt` front-end, and a task manager
+with shutdown/reboot buttons. Apps fill the screen one at a time for
+now (switch via the taskbar) -- no floating windows yet.
+
+### 🥾 `boot.json` / disk installs
+NyxOS no longer owns `/startup.lua` directly -- it writes a `boot.json`
+(`name`, `version`, `author`, `file: "nyxos.lua"`) that
+[NyxLoader](https://github.com/yo-le-zz/NyxLoader) chainloads. A fresh
+main-computer install formats everything except `/rom`, then installs
+NyxLoader automatically. `install` also offers installing onto a disk
+instead, for a portable NyxOS.
+
+### 🗑️ `rm` / `dd`
+```bash
+rm -rf ./scratch          # wildcards/multi-target deletes ask for a
+                           # typed confirmation unless -f is given
+dd if=/dev/zero of=blank.bin bs=1024 count=10
+```
+
 ### 📝 `.nyx` scripts
 ```bash
 nyx myscript.nyx
@@ -311,12 +336,11 @@ For scripts that want one entry point into every core subsystem
 
 Larger features that are planned but **not yet implemented**:
 
-- Signed boot / secure boot (CCSecureBoot-style), with a BIOS-like boot
-  order editable from a recovery menu
-- A full graphical desktop: taskbar, drawn icons, a Windows-style file
-  explorer, and a task manager
-- A turtle fleet manager with live monitoring
+- `.nyx` arithmetic and richer control flow
+- Real secure boot: signing NyxOS's files at install time via the
+  Cryptography Accelerator, verified by NyxLoader before chainloading
 - `apt` importing (and auto-adapting) almost any project from
   [PineStore.cc](https://pinestore.cc)
+- A turtle fleet manager with live monitoring
 
 See `TODO.md` in the repository for the detailed, up-to-date list.

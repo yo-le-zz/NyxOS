@@ -82,6 +82,25 @@ end
 -- The actual interactive shell: graphical (Basalt) with an automatic
 -- text fallback if it's unavailable/disabled.
 local function runInteractiveShell()
+    local nyxlibOk, nyxlibForUi = pcall(dofile, "/lib/nyxlib.lua")
+    local uiMode = "shell"
+    if nyxlibOk and nyxlibForUi then
+        local cfg = nyxlibForUi.loadTable("/etc/nyx-config.lua")
+        uiMode = cfg.uiMode or "shell"
+    end
+
+    if uiMode == "desktop" then
+        local desktopOk, desktop = pcall(dofile, "/lib/desktop.lua")
+        if desktopOk and desktop then
+            local runOk, success = pcall(desktop.run)
+            if runOk and success then
+                return
+            end
+        end
+        -- Desktop unavailable/crashed: fall through to the standard
+        -- graphical shell below instead of getting stuck.
+    end
+
     local shelluiOk, shellui = pcall(dofile, "/lib/shellui.lua")
     if shelluiOk and shellui then
         local runOk, success = pcall(shellui.run)

@@ -6,7 +6,7 @@
 -- installed/broken, a Recovery option repairs system files without
 -- touching your data (see also the standalone `recovery` command).
 
-local VERSION = "1.0.1"
+local VERSION = "1.0.2"
 local palette = colors or colours
 
 ------------------------------------------------------------------
@@ -105,30 +105,59 @@ local function loadThemePresets(dataDir)
     return defaults
 end
 
-local function isInstalled()
-    return fs.exists("/etc/nyx-release") or fs.exists("/startup.lua")
+-- NyxOS installs behind NyxLoader now: the OS entry point is
+-- /nyxos.lua (or <root>/nyxos.lua on a disk install), described by a
+-- boot.json NyxLoader reads to know what to chainload. /startup.lua is
+-- NyxLoader's own territory on the main computer.
+local function isInstalled(root)
+    root = root or ""
+    return fs.exists(fs.combine(root, "etc/nyx-release"))
+        or fs.exists(fs.combine(root, "nyxos.lua"))
+        or (root == "" and fs.exists("/startup.lua"))
+end
+
+-- Detects any attached disk drive (peripheral type "drive") with a
+-- mounted disk, for the "install on a disk" flow.
+local function findDisks()
+    local disks = {}
+    if not peripheral then
+        return disks
+    end
+    for _, name in ipairs(peripheral.getNames()) do
+        if peripheral.getType(name) == "drive" then
+            local drive = peripheral.wrap(name)
+            local mount = drive and drive.getMountPath and drive.getMountPath()
+            if mount then
+                table.insert(disks, { peripheralName = name, mount = mount })
+            end
+        end
+    end
+    return disks
 end
 
 -- Heuristic: NyxOS looks *partially* installed (some core pieces
 -- present, others missing) -- a good sign something broke, and the
 -- wizard should offer Recovery instead of a blind update.
-local function looksBroken()
-    if not isInstalled() then
+local function looksBroken(root)
+    root = root or ""
+    if not isInstalled(root) then
         return false
     end
-    local expected = { "/startup.lua", "/lib/nyxlib.lua", "/lib/users.lua", "/bin/apt.lua", "/etc/passwd" }
+    local expected = { "nyxos.lua", "lib/nyxlib.lua", "lib/users.lua", "bin/apt.lua", "etc/passwd" }
     local missing = 0
     for _, p in ipairs(expected) do
-        if not fs.exists(p) then missing = missing + 1 end
+        if not fs.exists(fs.combine(root, p)) then missing = missing + 1 end
     end
     return missing > 0 and missing < #expected
 end
 
-local function getInstalledVersion()
-    if not fs.exists("/etc/nyx-release") then
+local function getInstalledVersion(root)
+    root = root or ""
+    local releasePath = fs.combine(root, "etc/nyx-release")
+    if not fs.exists(releasePath) then
         return "unknown"
     end
-    local f = fs.open("/etc/nyx-release", "r")
+    local f = fs.open(releasePath, "r")
     local line = f.readLine() or "unknown"
     f.close()
     return line
@@ -167,78 +196,185 @@ local function copyTree(src, dst, skip)
     end
 end
 
-local function writeRelease()
-    local f = fs.open("/etc/nyx-release", "w")
+local function writeRelease(root)
+    root = root or ""
+    local f = fs.open(fs.combine(root, "etc/nyx-release"), "w")
     f.write("NyxOS " .. VERSION .. "\n")
     f.write("Installed on " .. os.date("%d/%m/%Y %H:%M:%S") .. "\n")
     f.close()
 end
 
+local function writeBootJson(root)
+    root = root or ""
+    local f = fs.open(fs.combine(root, "boot.json"), "w")
+    f.write(textutils.serialiseJSON and textutils.serialiseJSON({
+        name = "NyxOS",
+        version = VERSION,
+        author = "yo-le-zz",
+        file = "nyxos.lua",
+    }) or ('{"name":"NyxOS","version":"' .. VERSION .. '","author":"yo-le-zz","file":"nyxos.lua"}'))
+    f.close()
+end
+
 -- /etc files that must never be overwritten by an update/recovery
-local UPDATE_SKIP = {
-    ["/etc/passwd"] = true,
-    ["/etc/hostname"] = true,
-    ["/etc/nyx-theme.lua"] = true,
-    ["/etc/nyx-display.lua"] = true,
-    ["/etc/nyx-config.lua"] = true,
-    ["/etc/encrypt-config.lua"] = true,
-    ["/etc/nyx-release"] = true,
-    ["/etc/apt/installed.lua"] = true,
-    ["/etc/machine-id"] = true,
-    ["/etc/sudoers.lua"] = true,
+-- (paths relative to the install root -- see deployFiles).
+local UPDATE_SKIP_NAMES = {
+    "etc/passwd", "etc/hostname", "etc/nyx-theme.lua", "etc/nyx-display.lua",
+    "etc/nyx-config.lua", "etc/encrypt-config.lua", "etc/nyx-release",
+    "etc/apt/installed.lua", "etc/machine-id", "etc/sudoers.lua",
 }
 
-local function deployFiles(dataDir, isUpdate)
+-- root: "" for the main computer, or a disk's mount path (e.g.
+-- "disk3") for a disk install -- everything is deployed under that
+-- prefix so a disk install is fully self-contained and portable.
+local function deployFiles(dataDir, root, isUpdate)
+    root = root or ""
     print(isUpdate and "Updating system files..." or "Installing files...")
 
-    ensureDir("/bin")
-    ensureDir("/lib")
-    ensureDir("/etc")
-    ensureDir("/var")
-    ensureDir("/home")
+    ensureDir(fs.combine(root, "bin"))
+    ensureDir(fs.combine(root, "lib"))
+    ensureDir(fs.combine(root, "etc"))
+    ensureDir(fs.combine(root, "var"))
+    ensureDir(fs.combine(root, "home"))
 
-    copyTree(fs.combine(dataDir, "bin"), "/bin")
-    copyTree(fs.combine(dataDir, "lib"), "/lib")
-    copyTree(fs.combine(dataDir, "etc/services"), "/etc/services")
-
-    copyFile(fs.combine(dataDir, "startup.lua"), "/startup.lua")
-
-    if fs.exists(fs.combine(dataDir, "etc/motd")) then
-        copyFile(fs.combine(dataDir, "etc/motd"), "/etc/motd")
+    local skip = {}
+    for _, name in ipairs(UPDATE_SKIP_NAMES) do
+        skip[fs.combine(root, name)] = true
     end
 
-    ensureDir("/etc/apt")
-    if not isUpdate or not fs.exists("/etc/apt/installed.lua") then
+    copyTree(fs.combine(dataDir, "bin"), fs.combine(root, "bin"), skip)
+    copyTree(fs.combine(dataDir, "lib"), fs.combine(root, "lib"), skip)
+    copyTree(fs.combine(dataDir, "etc/services"), fs.combine(root, "etc/services"), skip)
+
+    -- The OS entry point: NyxLoader chainloads this via boot.json,
+    -- instead of the OS owning /startup.lua directly.
+    copyFile(fs.combine(dataDir, "startup.lua"), fs.combine(root, "nyxos.lua"))
+    writeBootJson(root)
+
+    if fs.exists(fs.combine(dataDir, "etc/motd")) then
+        copyFile(fs.combine(dataDir, "etc/motd"), fs.combine(root, "etc/motd"))
+    end
+
+    ensureDir(fs.combine(root, "etc/apt"))
+    if not isUpdate or not fs.exists(fs.combine(root, "etc/apt/installed.lua")) then
         if fs.exists(fs.combine(dataDir, "etc/apt/installed.lua")) then
-            copyFile(fs.combine(dataDir, "etc/apt/installed.lua"), "/etc/apt/installed.lua")
+            copyFile(fs.combine(dataDir, "etc/apt/installed.lua"), fs.combine(root, "etc/apt/installed.lua"))
         end
     end
 
     if not isUpdate then
         if fs.exists(fs.combine(dataDir, "etc/nyx-release")) then
-            copyFile(fs.combine(dataDir, "etc/nyx-release"), "/etc/nyx-release")
+            copyFile(fs.combine(dataDir, "etc/nyx-release"), fs.combine(root, "etc/nyx-release"))
         end
     end
 
-    writeRelease()
+    writeRelease(root)
 end
 
-local function applyConfig(config)
-    local nyxlib = dofile("/lib/nyxlib.lua")
-    local users = dofile("/lib/users.lua")
-    local theme = dofile("/lib/theme.lua")
-
-    nyxlib.setHostname(config.hostname)
-    theme.save({ name = config.themeName, accent = config.accent })
-    nyxlib.saveTable("/etc/nyx-config.lua", { gui = config.gui ~= false })
-
-    if users.count() == 0 then
-        local ok, err = users.add(config.username, config.password, true)
-        if not ok then
-            print("Error creating user: " .. tostring(err))
-            return false
+-- Wipes everything on the main computer except /rom, for a truly fresh
+-- install (never run for updates/recovery, and never for a disk
+-- install -- only ever for a brand new main-computer install).
+local function wipeExceptRom()
+    for _, name in ipairs(fs.list("/")) do
+        if name ~= "rom" then
+            pcall(fs.delete, "/" .. name)
         end
     end
+end
+
+-- Fetches and runs NyxLoader's own webinstall.lua so it becomes this
+-- computer's /startup.lua (NyxLoader is a separate project -- NyxOS
+-- only needs to hand off to its installer, not reimplement it). If
+-- this fails (no http, network hiccup...), NyxOS still writes a
+-- minimal fallback /startup.lua that boots straight into nyxos.lua, so
+-- the computer never bricks even without NyxLoader installed.
+local function installNyxLoader()
+    if http then
+        print("Installing NyxLoader (boot menu)...")
+        local response = http.get("https://raw.githubusercontent.com/yo-le-zz/NyxLoader/main/webinstall.lua")
+        if response then
+            local body = response.readAll()
+            response.close()
+            local tmpPath = "/var/apt/tmp/nyxloader-webinstall.lua"
+            if not fs.exists("/var/apt/tmp") then fs.makeDir("/var/apt/tmp") end
+            local f = fs.open(tmpPath, "w")
+            f.write(body)
+            f.close()
+            local ok = shell.run(tmpPath)
+            fs.delete(tmpPath)
+            if ok then
+                print("NyxLoader installed.")
+                return true
+            end
+            print("NyxLoader's installer reported an error.")
+        else
+            print("Could not download NyxLoader's installer.")
+        end
+        print("Using a minimal fallback boot script instead.")
+    else
+        print("http unavailable: using a minimal fallback boot script instead of NyxLoader.")
+    end
+
+    local f = fs.open("/startup.lua", "w")
+    f.write([[
+-- Minimal fallback boot script (NyxLoader could not be installed).
+-- Re-run 'install' with http enabled to get the full NyxLoader boot
+-- menu instead: https://github.com/yo-le-zz/NyxLoader
+if fs.exists("/nyxos.lua") then
+    dofile("/nyxos.lua")
+else
+    print("nyxos.lua not found.")
+end
+]])
+    f.close()
+    return false
+end
+
+local function applyConfig(config, root)
+    root = root or ""
+
+    if root == "" then
+        local nyxlib = dofile("/lib/nyxlib.lua")
+        local users = dofile("/lib/users.lua")
+        local theme = dofile("/lib/theme.lua")
+
+        nyxlib.setHostname(config.hostname)
+        theme.save({ name = config.themeName, accent = config.accent })
+        nyxlib.saveTable("/etc/nyx-config.lua", { gui = config.gui ~= false })
+
+        if users.count() == 0 then
+            local ok, err = users.add(config.username, config.password, true)
+            if not ok then
+                print("Error creating user: " .. tostring(err))
+                return false
+            end
+        end
+        return true
+    end
+
+    -- Disk install: users.lua/nyxlib.lua hardcode absolute "/etc/..."
+    -- paths (correct for the main computer they'd normally run on), so
+    -- write the equivalent files directly under the disk's own root
+    -- instead, using the disk's own copy of crypto.lua for hashing.
+    local crypto = dofile(fs.combine(root, "lib/crypto.lua"))
+    local nyxlib = dofile(fs.combine(root, "lib/nyxlib.lua"))
+
+    local f = fs.open(fs.combine(root, "etc/hostname"), "w")
+    f.write(config.hostname)
+    f.close()
+
+    nyxlib.saveTable(fs.combine(root, "etc/nyx-theme.lua"), { name = config.themeName, accent = config.accent })
+    nyxlib.saveTable(fs.combine(root, "etc/nyx-config.lua"), { gui = config.gui ~= false })
+
+    local home = "home/" .. config.username
+    ensureDir(fs.combine(root, home))
+    local hashedPassword = ""
+    if config.password and config.password ~= "" then
+        hashedPassword = crypto.hash(config.password)
+    end
+    nyxlib.saveTable(fs.combine(root, "etc/passwd"), {
+        { username = config.username, password = hashedPassword, home = "/" .. home, admin = true },
+    })
 
     return true
 end
@@ -516,6 +652,29 @@ end
 -- Entry point
 ------------------------------------------------------------------
 
+local function chooseTarget()
+    local disks = findDisks()
+    if #disks == 0 then
+        return "" -- only the main computer is available
+    end
+
+    print("Install NyxOS on:")
+    print("  1) This computer")
+    for i, d in ipairs(disks) do
+        print("  " .. (i + 1) .. ") Disk (" .. d.peripheralName .. ")")
+    end
+    write("Choice [1]: ")
+    local choice = tonumber(read())
+    if not choice or choice == 1 then
+        return ""
+    end
+    local disk = disks[choice - 1]
+    if not disk then
+        return ""
+    end
+    return disk.mount
+end
+
 local function main()
     local dataDir = findDataDir()
     if not dataDir then
@@ -526,10 +685,19 @@ local function main()
 
     setupScreen(dataDir)
 
-    local alreadyInstalled = isInstalled()
+    -- Only offer a choice of target for a brand new install -- updates
+    -- and recovery always target the main computer's own existing
+    -- install.
+    local root = ""
+    local freshInstall = not isInstalled("")
+    if freshInstall then
+        root = chooseTarget()
+    end
+
+    local alreadyInstalled = isInstalled(root)
     local mode = "install"
     if alreadyInstalled then
-        mode = looksBroken() and "recovery" or "update"
+        mode = looksBroken(root) and "recovery" or "update"
     end
 
     local presets = loadThemePresets(dataDir)
@@ -553,12 +721,33 @@ local function main()
         return
     end
 
-    deployFiles(dataDir, config.update or alreadyInstalled)
-
-    if not config.update and not alreadyInstalled then
-        if not applyConfig(config) then
+    -- A brand new install directly on the main computer wipes
+    -- everything except /rom first, for a truly clean NyxOS -- never
+    -- done for updates/recovery, and never for a disk install (which
+    -- must not touch the computer's own files).
+    if root == "" and not alreadyInstalled and not config.update then
+        print("")
+        print("WARNING: installing on this computer erases EVERYTHING on it")
+        print("(except the built-in rom) before installing NyxOS.")
+        write("Type 'yes' to confirm and continue: ")
+        if read() ~= "yes" then
+            print("Installation cancelled.")
             return
         end
+        print("Formatting...")
+        wipeExceptRom()
+    end
+
+    deployFiles(dataDir, root, config.update or alreadyInstalled)
+
+    if not config.update and not alreadyInstalled then
+        if not applyConfig(config, root) then
+            return
+        end
+    end
+
+    if root == "" and not config.update and not alreadyInstalled then
+        installNyxLoader()
     end
 
     term.setBackgroundColor(palette.black)
@@ -568,6 +757,10 @@ local function main()
         print("Recovery complete! NyxOS " .. VERSION .. " system files repaired.")
     elseif config.update or alreadyInstalled then
         print("Update complete! NyxOS " .. VERSION .. " is ready.")
+    elseif root ~= "" then
+        print("Installation complete on disk (" .. root .. ")!")
+        print("First account: " .. config.username .. " (administrator)")
+        print("Insert this disk into a computer running NyxLoader to boot it.")
     else
         print("Installation complete! NyxOS " .. VERSION .. " is ready.")
         print("First account: " .. config.username .. " (administrator)")

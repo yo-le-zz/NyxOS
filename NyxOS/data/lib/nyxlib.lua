@@ -30,56 +30,7 @@ function nyxlib.saveTable(path, data)
 end
 
 function nyxlib.loadManifest()
-    ------------------------------------------------------------------
--- /dev special files (null, zero) -- CC:Tweaked has no real character
--- devices, so this wraps fs.open once at boot to fake the two most
--- commonly used ones. Every other path behaves exactly as before.
-------------------------------------------------------------------
-local devFsInstalled = false
-
-local function nullHandle()
-    return {
-        write = function() end,
-        writeLine = function() end,
-        close = function() end,
-        readAll = function() return "" end,
-        readLine = function() return nil end,
-        read = function() return nil end,
-    }
-end
-
-local function zeroHandle()
-    return {
-        write = function() end,
-        writeLine = function() end,
-        close = function() end,
-        readAll = function() return string.rep("\0", 4096) end,
-        readLine = function() return string.rep("\0", 256) end,
-        read = function(n) return 0 end,
-    }
-end
-
-function nyxlib.installDevFs()
-    if devFsInstalled then return end
-    devFsInstalled = true
-
-    if not fs.exists("/dev") then
-        fs.makeDir("/dev")
-    end
-
-    local originalOpen = fs.open
-    fs.open = function(path, mode)
-        local resolved = "/" .. fs.combine("", path)
-        if resolved == "/dev/null" then
-            return nullHandle()
-        elseif resolved == "/dev/zero" and (mode == "r" or mode == "rb" or mode == nil) then
-            return zeroHandle()
-        end
-        return originalOpen(path, mode)
-    end
-end
-
-return nyxlib.loadTable(MANIFEST_PATH)
+    return nyxlib.loadTable(MANIFEST_PATH)
 end
 
 function nyxlib.saveManifest(manifest)
@@ -90,56 +41,7 @@ end
 -- at boot). Volatile file, cleared on shutdown (lives in /var/run like
 -- boot.time).
 function nyxlib.loadSession()
-    ------------------------------------------------------------------
--- /dev special files (null, zero) -- CC:Tweaked has no real character
--- devices, so this wraps fs.open once at boot to fake the two most
--- commonly used ones. Every other path behaves exactly as before.
-------------------------------------------------------------------
-local devFsInstalled = false
-
-local function nullHandle()
-    return {
-        write = function() end,
-        writeLine = function() end,
-        close = function() end,
-        readAll = function() return "" end,
-        readLine = function() return nil end,
-        read = function() return nil end,
-    }
-end
-
-local function zeroHandle()
-    return {
-        write = function() end,
-        writeLine = function() end,
-        close = function() end,
-        readAll = function() return string.rep("\0", 4096) end,
-        readLine = function() return string.rep("\0", 256) end,
-        read = function(n) return 0 end,
-    }
-end
-
-function nyxlib.installDevFs()
-    if devFsInstalled then return end
-    devFsInstalled = true
-
-    if not fs.exists("/dev") then
-        fs.makeDir("/dev")
-    end
-
-    local originalOpen = fs.open
-    fs.open = function(path, mode)
-        local resolved = "/" .. fs.combine("", path)
-        if resolved == "/dev/null" then
-            return nullHandle()
-        elseif resolved == "/dev/zero" and (mode == "r" or mode == "rb" or mode == nil) then
-            return zeroHandle()
-        end
-        return originalOpen(path, mode)
-    end
-end
-
-return nyxlib.loadTable(SESSION_PATH)
+    return nyxlib.loadTable(SESSION_PATH)
 end
 
 function nyxlib.saveSession(username)
@@ -163,56 +65,7 @@ end
 function nyxlib.loadPasswd()
     local ok, users = pcall(dofile, "/lib/users.lua")
     if not ok or not users then
-        ------------------------------------------------------------------
--- /dev special files (null, zero) -- CC:Tweaked has no real character
--- devices, so this wraps fs.open once at boot to fake the two most
--- commonly used ones. Every other path behaves exactly as before.
-------------------------------------------------------------------
-local devFsInstalled = false
-
-local function nullHandle()
-    return {
-        write = function() end,
-        writeLine = function() end,
-        close = function() end,
-        readAll = function() return "" end,
-        readLine = function() return nil end,
-        read = function() return nil end,
-    }
-end
-
-local function zeroHandle()
-    return {
-        write = function() end,
-        writeLine = function() end,
-        close = function() end,
-        readAll = function() return string.rep("\0", 4096) end,
-        readLine = function() return string.rep("\0", 256) end,
-        read = function(n) return 0 end,
-    }
-end
-
-function nyxlib.installDevFs()
-    if devFsInstalled then return end
-    devFsInstalled = true
-
-    if not fs.exists("/dev") then
-        fs.makeDir("/dev")
-    end
-
-    local originalOpen = fs.open
-    fs.open = function(path, mode)
-        local resolved = "/" .. fs.combine("", path)
-        if resolved == "/dev/null" then
-            return nullHandle()
-        elseif resolved == "/dev/zero" and (mode == "r" or mode == "rb" or mode == nil) then
-            return zeroHandle()
-        end
-        return originalOpen(path, mode)
-    end
-end
-
-return nyxlib.loadTable(PASSWD_PATH)
+        return nyxlib.loadTable(PASSWD_PATH)
     end
     local session = nyxlib.loadSession()
     if session.username then
@@ -277,8 +130,6 @@ function nyxlib.formatSize(bytes)
     return string.format("%.1f%s", bytes, units[i])
 end
 
--- Loads Basalt from several possible locations (installed, data/
--- floppy, or a relative fallback).
 -- Whether the graphical interface should be used at all. Set at
 -- install time (see install.lua's GUI checkbox); defaults to true when
 -- unset so existing installs keep behaving as before.
@@ -293,6 +144,8 @@ function nyxlib.guiEnabled()
     return cfg.gui and true or false
 end
 
+-- Loads Basalt from several possible locations (installed, data/
+-- floppy, or a relative fallback).
 function nyxlib.loadBasalt(extraPaths)
     if not nyxlib.guiEnabled() then
         return nil
@@ -322,7 +175,7 @@ function nyxlib.loadBasalt(extraPaths)
 end
 
 function nyxlib.isInstalled()
-    return fs.exists("/etc/nyx-release") or fs.exists("/startup.lua")
+    return fs.exists("/etc/nyx-release") or fs.exists("/startup.lua") or fs.exists("/nyxos.lua")
 end
 
 ------------------------------------------------------------------
@@ -339,7 +192,10 @@ local function nullHandle()
         close = function() end,
         readAll = function() return "" end,
         readLine = function() return nil end,
-        read = function() return nil end,
+        read = function(n)
+            if n then return "" end
+            return nil
+        end,
     }
 end
 
@@ -350,7 +206,10 @@ local function zeroHandle()
         close = function() end,
         readAll = function() return string.rep("\0", 4096) end,
         readLine = function() return string.rep("\0", 256) end,
-        read = function(n) return 0 end,
+        read = function(n)
+            if n then return string.rep("\0", n) end
+            return 0
+        end,
     }
 end
 

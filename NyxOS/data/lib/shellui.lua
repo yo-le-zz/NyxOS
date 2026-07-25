@@ -153,7 +153,7 @@ function shellui.run()
                     return motd .. "\n\n"
                 end
             end
-            return "NyxOS Graphical Shell v1.0.1\nType 'help' for the command list, or 'man' for the manual.\n\n"
+            return "NyxOS Graphical Shell v1.0.2\nType 'help' for the command list, or 'man' for the manual.\n\n"
         end
 
         local function redrawTabBar()

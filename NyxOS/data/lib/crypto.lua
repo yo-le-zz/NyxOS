@@ -4,41 +4,25 @@
 
 local crypto = {}
 
--- Detects and returns the connected Cryptography Accelerator
+-- Detects and returns the connected Cryptography Accelerator.
+-- peripheral.find() checks every attached peripheral by declared type,
+-- including ones reachable only through a wired modem network -- unlike
+-- a manual side/name scan, this works regardless of how the accelerator
+-- is physically connected.
 local function findCryptoAccelerator()
-    local sides = {"top", "bottom", "left", "right", "front", "back"}
-
-    -- Search by side (directly connected)
-    for _, side in ipairs(sides) do
-        if peripheral.isPresent(side) then
-            local p = peripheral.wrap(side)
-            if p and p.encrypt then
-                return p, side
-            end
-        end
+    local p = peripheral.find("cryptographic_accelerator")
+    if p then
+        return p, peripheral.getName(p)
     end
 
-    -- Search network peripherals (wired modems)
-    local names = peripheral.getNames()
-    for _, name in ipairs(names) do
-        local p = peripheral.wrap(name)
-        if not p then
-            goto continue
+    -- Fallback for renamed/modified peripheral ids: any attached
+    -- peripheral (direct or through a wired modem) that exposes an
+    -- `encrypt` method.
+    for _, name in ipairs(peripheral.getNames()) do
+        local wrapped = peripheral.wrap(name)
+        if wrapped and wrapped.encrypt then
+            return wrapped, name
         end
-
-        -- Check if the name contains "cryptographic_accelerator" (with or without a _0, _1, ... suffix)
-        if name:lower():find("cryptographic_accelerator") then
-            if p.encrypt then
-                return p, name
-            end
-        end
-
-        -- Also check if the peripheral has the encrypt method (for peripherals with different names)
-        if p.encrypt then
-            return p, name
-        end
-
-        ::continue::
     end
 
     return nil, nil

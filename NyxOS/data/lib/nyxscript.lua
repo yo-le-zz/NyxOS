@@ -13,6 +13,25 @@
 
 local nyxscript = {}
 
+-- Resolves a path the same way shell.resolve would, but degrades
+-- gracefully if `shell` isn't available in the calling environment
+-- (e.g. a program launched in a stripped-down context) instead of
+-- crashing the whole script.
+local function resolvePath(path)
+    if shell and shell.resolve then
+        local ok, resolved = pcall(shell.resolve, path)
+        if ok and resolved then
+            return resolved
+        end
+    end
+    if path:sub(1, 1) == "/" then
+        return path
+    end
+    local dir = (shell and shell.dir and select(2, pcall(shell.dir))) or ""
+    if type(dir) ~= "string" then dir = "" end
+    return fs.combine(dir, path)
+end
+
 local function trim(s)
     return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
@@ -119,8 +138,8 @@ function nyxscript.run(source, vars, depth)
 
             elseif keyword == "call" then
                 local path = words[2]
-                if path and fs.exists(shell.resolve(path)) then
-                    local f = fs.open(shell.resolve(path), "r")
+                if path and fs.exists(resolvePath(path)) then
+                    local f = fs.open(resolvePath(path), "r")
                     local sub = f.readAll()
                     f.close()
                     local ok, err = nyxscript.run(sub, {}, depth + 1)
@@ -133,7 +152,11 @@ function nyxscript.run(source, vars, depth)
 
             else
                 -- Anything else is a NyxOS/CraftOS command line.
-                shell.run(line)
+                if shell and shell.run then
+                    shell.run(line)
+                else
+                    print("nyx: no shell available to run: " .. line)
+                end
             end
         end
 
@@ -144,7 +167,7 @@ function nyxscript.run(source, vars, depth)
 end
 
 function nyxscript.runFile(path, args)
-    local resolved = shell.resolve(path)
+    local resolved = resolvePath(path)
     if not fs.exists(resolved) then
         return false, "File not found: " .. path
     end
