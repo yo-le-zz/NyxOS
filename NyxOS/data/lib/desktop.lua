@@ -47,6 +47,7 @@ function desktop.run()
     local accent = theme.accent()
     local nyxlib = dofile("/lib/nyxlib.lua")
 
+    pcall(function() dofile("/lib/services.lua").registerPseudo("desktop", "ui", "Graphical desktop (Basalt)") end)
     local ok, runErr = pcall(function()
         local main = basalt.getMainFrame():setBackground(palette.black)
         local w, h = main:getWidth(), main:getHeight()
@@ -104,9 +105,18 @@ function desktop.run()
         -- app) gets its own fresh sub-frame that fully covers the
         -- content area; switching screens just hides the previous one
         -- and shows the new one.
+        -- Basalt has no Frame:hide(): visibility is the `visible` property.
+        -- Old panels are destroyed one launch later (never in the middle of
+        -- the click that is replacing them) so they do not pile up.
+        local graveyard = {}
         local function newPanel()
+            for _, old in ipairs(graveyard) do
+                pcall(function() old:destroy() end)
+            end
+            graveyard = {}
             if currentPanel then
-                currentPanel:hide()
+                pcall(function() currentPanel:setVisible(false) end)
+                table.insert(graveyard, currentPanel)
             end
             local panel = content:addFrame()
                 :setPosition(1, 1)
@@ -119,19 +129,36 @@ function desktop.run()
         local function showDesktopIcons()
             local area = newPanel()
             activeLabel:setText("Desktop")
-            local x, y = 2, 2
+            local x, y = 3, 2
             for _, app in ipairs(apps) do
+                -- Rounded icon: a coloured 8x3 button whose four corner
+                -- cells are drawn with teletext characters (128-159),
+                -- each leaving only the inner corner pixel coloured.
+                local iw = 8
                 local icon = area:addButton()
                     :setText(app.glyph)
                     :setPosition(x, y)
-                    :setSize(6, 3)
+                    :setSize(iw, 3)
                     :setBackground(app.color)
                     :setForeground(palette.black)
                 icon:onClick(function() app.launch() end)
+                local function corner(cx, cy, char, fg, bg)
+                    area:addLabel()
+                        :setText(char)
+                        :setPosition(cx, cy)
+                        :setSize(1, 1)
+                        :setForeground(fg)
+                        :setBackground(bg)
+                        :onClick(function() app.launch() end)
+                end
+                corner(x, y, "\159", palette.black, app.color)
+                corner(x + iw - 1, y, "\144", app.color, palette.black)
+                corner(x, y + 2, "\130", app.color, palette.black)
+                corner(x + iw - 1, y + 2, "\129", app.color, palette.black)
                 area:addLabel()
                     :setText(app.name)
                     :setForeground(palette.white)
-                    :setPosition(x, y + 3)
+                    :setPosition(x + math.floor((iw - #app.name) / 2), y + 3)
                 y = y + 5
                 if y > h - 8 then
                     y = 2
@@ -160,7 +187,7 @@ function desktop.run()
 
         -- App: File Explorer (Windows-style: breadcrumb, list, up a
         -- level, new folder, delete/rename)
-        registerApp("Files", "[#]", palette.yellow, function(area)
+        registerApp("Files", " DIR ", palette.yellow, function(area)
             local currentDir = "/"
 
             local pathLabel = area:addLabel()
@@ -264,57 +291,18 @@ function desktop.run()
             refresh()
         end)
 
-        -- App: Terminal (single embedded terminal, same execution model
-        -- as the standalone graphical shell)
-        registerApp("Terminal", ">_", palette.black, function(area)
-            local outputBox = area:addTextBox()
-                :setPosition(2, 2)
-                :setSize(w - 3, h - 5)
-                :setEditable(false)
-                :setBackground(palette.black)
-                :setForeground(palette.white)
-
-            local cmdInput = area:addInput()
-                :setPosition(2, h - 2)
-                :setSize(w - 14, 1)
-                :setBackground(palette.gray)
-                :setForeground(palette.white)
-                :setPlaceholder("Type a command...")
-
-            local text = "NyxOS Terminal\n\n"
-            outputBox:setText(text)
-
-            local function run(cmd)
-                if not cmd or cmd == "" then return end
-                text = text .. "$ " .. cmd .. "\n"
-                local out, err = captureCommand(cmd)
-                if out and out ~= "" then text = text .. out .. "\n" end
-                if err then text = text .. "Error: " .. tostring(err) .. "\n" end
-                text = text .. "\n"
-                outputBox:setText(text)
-                scrollToBottom(outputBox)
-                cmdInput:setText("")
-            end
-
-            cmdInput:onKey(function(self, key)
-                if key == keys.enter or key == keys.numPadEnter then
-                    run(cmdInput:getText())
-                end
-            end)
-
-            area:addButton()
-                :setText("Run")
-                :setPosition(w - 10, h - 2)
-                :setSize(6, 1)
-                :setBackground(accent)
-                :setForeground(palette.black)
-                :onClick(function() run(cmdInput:getText()) end)
-
-            cmdInput:setFocused(true)
+        -- App: Terminal -- the very same UI as the graphical shell
+        -- (tabs, history, clear/exit, sudo prompts), just smaller.
+        registerApp("Terminal", " >_ ", palette.cyan, function(area)
+            local shellui = dofile("/lib/shellui.lua")
+            shellui.mount(basalt, area, {
+                header = false,
+                onExit = function() showDesktopIcons() end,
+            })
         end)
 
         -- App: Packages (apt front-end)
-        registerApp("Packages", "[+]", palette.green, function(area)
+        registerApp("Packages", " PKG ", palette.green, function(area)
             local manifest = nyxlib.loadManifest()
             local names = {}
             for name in pairs(manifest) do table.insert(names, name) end
@@ -363,62 +351,169 @@ function desktop.run()
         end)
 
         -- App: Task Manager (services + power)
-        registerApp("Tasks", "[T]", palette.orange, function(area)
+        registerApp("Tasks", " TSK ", palette.orange, function(area)
             local servicesOk, services = pcall(dofile, "/lib/services.lua")
+            local specs = dofile("/lib/specs.lua")
+            local procui = dofile("/lib/procui.lua")
+            local aw, ah = area:getWidth(), area:getHeight()
 
-            local list = area:addList()
-                :setPosition(2, 2)
-                :setSize(w - 4, h - 12)
+            -- Three pages: Processes / Specs / Power
+            local pages = {}
+            local function page()
+                local f = area:addFrame():setPosition(1, 3):setSize(aw, ah - 2):setBackground(palette.black)
+                f:setVisible(false)
+                table.insert(pages, f)
+                return f
+            end
+            local tabButtons = {}
+            local function showPage(i)
+                for j, f in ipairs(pages) do f:setVisible(j == i) end
+                for j, b in ipairs(tabButtons) do
+                    b:setBackground(j == i and accent or palette.gray)
+                    b:setForeground(j == i and palette.black or palette.white)
+                end
+            end
+            local tabNames = { "Processes", "Specs", "Power" }
+            local tx = 2
+            for i, name in ipairs(tabNames) do
+                local b = area:addButton():setText(" " .. name .. " "):setPosition(tx, 2)
+                    :setSize(#name + 2, 1)
+                b:onClick(function() showPage(i) end)
+                tabButtons[i] = b
+                tx = tx + #name + 3
+            end
+            area:addLabel():setText("Task Manager"):setForeground(accent):setPosition(2, 1)
+
+            ---------------- Processes ----------------
+            local pp = page()
+            local list = pp:addList()
+                :setPosition(2, 1)
+                :setSize(aw - 2, ah - 7)
                 :setBackground(palette.gray)
                 :setForeground(palette.white)
                 :setSelectedBackground(accent)
                 :setSelectedForeground(palette.black)
+            local info = pp:addLabel():setText(""):setForeground(palette.lightGray):setPosition(2, ah - 5)
 
-            local names = {}
+            local rows = {}
+            local selected = nil
             local function refresh()
                 list:clear()
-                names = {}
-                if servicesOk and services then
-                    for _, def in ipairs(services.list()) do
-                        local st = services.status(def.name)
-                        table.insert(names, def.name)
-                        list:addItem(def.name .. " -- " .. st.state .. (def.autostart and " [enabled]" or ""))
+                rows = {}
+                if not (servicesOk and services) then return end
+                local running = {}
+                for _, p in ipairs(services.processes()) do
+                    table.insert(rows, p)
+                    if p.kind == "service" then running[p.name] = true end
+                end
+                for _, def in ipairs(services.list()) do
+                    if not running[def.name] then
+                        table.insert(rows, { pid = 0, name = def.name, kind = "service", state = "stopped",
+                            user = "root", killable = false, description = def.description, stoppedService = true })
                     end
+                end
+                for _, p in ipairs(rows) do
+                    list:addItem(string.format("%-4s %-13s %-8s %s",
+                        p.pid > 0 and p.pid or "-", tostring(p.name):sub(1, 13), p.kind, p.state))
                 end
             end
             refresh()
 
-            local selected = nil
-            list:onSelect(function(self, index) selected = names[index] end)
+            list:onSelect(function(self, index)
+                selected = rows[index]
+                if selected then
+                    info:setText(((selected.description or selected.cmd or "") .. ""):sub(1, aw - 4))
+                end
+            end)
 
-            area:addButton():setText("Enable"):setPosition(2, h - 8):setSize(10, 1)
-                :setBackground(accent):setForeground(palette.black)
-                :onClick(function()
-                    if selected then services.setAutostart(selected, true); refresh() end
-                end)
-            area:addButton():setText("Disable"):setPosition(13, h - 8):setSize(10, 1)
-                :setBackground(palette.gray):setForeground(palette.white)
-                :onClick(function()
-                    if selected then services.setAutostart(selected, false); refresh() end
-                end)
-
-            area:addLabel():setText("Power:"):setForeground(palette.white):setPosition(2, h - 5)
-            area:addButton():setText("Reboot"):setPosition(2, h - 4):setSize(10, 1)
-                :setBackground(palette.orange):setForeground(palette.black)
-                :onClick(function()
-                    basalt.stop()
-                    shell.run("reboot")
-                end)
-            area:addButton():setText("Shutdown"):setPosition(13, h - 4):setSize(11, 1)
+            local function act(fn)
+                if not selected then info:setText("Select a row first."); return end
+                local ok, msg = pcall(fn, selected)
+                info:setText(tostring(ok and msg or ("Error: " .. tostring(msg))):sub(1, aw - 4))
+                refresh()
+            end
+            local by = ah - 3
+            pp:addButton():setText("Kill"):setPosition(2, by):setSize(7, 1)
                 :setBackground(palette.red):setForeground(palette.white)
                 :onClick(function()
-                    basalt.stop()
-                    shell.run("shutdown")
+                    act(function(p)
+                        if not p.killable then return p.name .. " cannot be killed here." end
+                        local _, msg = procui.killPid(p.pid)
+                        return msg
+                    end)
                 end)
+            pp:addButton():setText("Start"):setPosition(10, by):setSize(8, 1)
+                :setBackground(palette.green):setForeground(palette.black)
+                :onClick(function()
+                    act(function(p)
+                        if p.kind ~= "service" then return "Only services can be started." end
+                        local pid, err = services.start(p.name)
+                        return pid and ("started " .. p.name .. " (pid " .. pid .. ")") or tostring(err)
+                    end)
+                end)
+            pp:addButton():setText("Stop"):setPosition(19, by):setSize(7, 1)
+                :setBackground(palette.orange):setForeground(palette.black)
+                :onClick(function()
+                    act(function(p)
+                        if p.kind ~= "service" or p.pid == 0 then return "Not a running service." end
+                        local _, msg = procui.killPid(p.pid)
+                        return msg
+                    end)
+                end)
+            pp:addButton():setText("Enable"):setPosition(27, by):setSize(8, 1)
+                :setBackground(accent):setForeground(palette.black)
+                :onClick(function()
+                    act(function(p)
+                        if p.kind ~= "service" then return "Only services have autostart." end
+                        services.setAutostart(p.name, true)
+                        return p.name .. ": autostart on"
+                    end)
+                end)
+            pp:addButton():setText("Disable"):setPosition(36, by):setSize(9, 1)
+                :setBackground(palette.gray):setForeground(palette.white)
+                :onClick(function()
+                    act(function(p)
+                        if p.kind ~= "service" then return "Only services have autostart." end
+                        services.setAutostart(p.name, false)
+                        return p.name .. ": autostart off"
+                    end)
+                end)
+            pp:addButton():setText("Refresh"):setPosition(2, by + 1):setSize(9, 1)
+                :setBackground(palette.lightBlue):setForeground(palette.black)
+                :onClick(function() refresh(); info:setText("Refreshed.") end)
+
+            ---------------- Specs ----------------
+            local sp = page()
+            local specBox = sp:addTextBox()
+                :setPosition(2, 1):setSize(aw - 2, ah - 4)
+                :setEditable(false):setBackground(palette.black):setForeground(palette.white)
+            local function loadSpecs()
+                local lines = {}
+                for _, row in ipairs(specs.collect()) do
+                    lines[#lines + 1] = string.format("%-14s %s", row[1], row[2])
+                end
+                specBox:setText(table.concat(lines, "\n"))
+            end
+            loadSpecs()
+            sp:addButton():setText("Refresh"):setPosition(2, ah - 3):setSize(9, 1)
+                :setBackground(palette.lightBlue):setForeground(palette.black)
+                :onClick(loadSpecs)
+
+            ---------------- Power ----------------
+            local pw = page()
+            pw:addLabel():setText("Power"):setForeground(accent):setPosition(2, 2)
+            pw:addButton():setText(" Reboot "):setPosition(2, 4):setSize(12, 3)
+                :setBackground(palette.orange):setForeground(palette.black)
+                :onClick(function() basalt.stop(); shell.run("reboot") end)
+            pw:addButton():setText(" Shutdown "):setPosition(16, 4):setSize(14, 3)
+                :setBackground(palette.red):setForeground(palette.white)
+                :onClick(function() basalt.stop(); shell.run("shutdown") end)
+
+            showPage(1)
         end)
 
         -- App: Settings (theme + hostname)
-        registerApp("Settings", "[*]", palette.purple, function(area)
+        registerApp("Settings", " CFG ", palette.purple, function(area)
             area:addLabel():setText("Hostname:"):setForeground(palette.white):setPosition(2, 2)
             local hostInput = area:addInput()
                 :setPosition(2, 3)

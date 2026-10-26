@@ -1,6 +1,6 @@
 # 🚀 NyxOS
 
-> ⚠️ **Current version: 1.0.3**
+> ⚠️ **Current version: 1.0.4**
 >
 > Adds a graphical desktop, boot.json + disk installs (chainloaded via
 > the separate [NyxLoader](https://github.com/yo-le-zz/NyxLoader) project),
@@ -348,7 +348,7 @@ Larger features that are planned but **not yet implemented**:
   [PineStore.cc](https://pinestore.cc)
 - A turtle fleet manager with live monitoring
 
-Ideas and bugs: please open an issue on GitHub.
+See [`TODO.md`](TODO.md) for the detailed roadmap, version by version.
 
 ---
 

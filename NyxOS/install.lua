@@ -6,7 +6,7 @@
 -- installed/broken, a Recovery option repairs system files without
 -- touching your data (see also the standalone `recovery` command).
 
-local VERSION = "1.0.3"
+local VERSION = "1.0.4"
 local palette = colors or colours
 
 ------------------------------------------------------------------
@@ -199,12 +199,34 @@ local function ensureDir(path)
     end
 end
 
+-- A CC computer only has ~1 MB of storage by default, and the downloaded
+-- data/ folder alone is over 500 KB: keeping it while a second copy is
+-- written next to it ran out of space ("Out of space" in fs.copy). When
+-- `consume` is on, every source file that lives on the computer's own
+-- storage is deleted as soon as it has been copied, so the peak usage
+-- stays at one copy plus one file. Sources on a disk are never deleted.
+local consume = false
+
+local function onOwnStorage(path)
+    local ok, drive = pcall(fs.getDrive, path)
+    return ok and drive == "hdd"
+end
+
 local function copyFile(src, dst)
     ensureDir(fs.getDir(dst))
     if fs.exists(dst) then
         fs.delete(dst)
     end
-    fs.copy(src, dst)
+    local ok, err = pcall(fs.copy, src, dst)
+    if not ok then
+        if fs.exists(dst) then pcall(fs.delete, dst) end
+        local free = fs.getFreeSpace and fs.getFreeSpace(fs.getDir(dst) == "" and "/" or fs.getDir(dst)) or "?"
+        error("cannot copy " .. src .. " to " .. dst .. ": " .. tostring(err)
+            .. " (free space: " .. tostring(free) .. " bytes)", 0)
+    end
+    if consume and onOwnStorage(src) and onOwnStorage(dst) then
+        fs.delete(src)
+    end
 end
 
 local function copyTree(src, dst, skip)
@@ -267,6 +289,9 @@ local function deployFiles(dataDir, root, isUpdate)
     ensureDir(fs.combine(root, "var"))
     ensureDir(fs.combine(root, "home"))
 
+    -- Main computer only: free the source files as they are installed.
+    consume = (root == "") and onOwnStorage(dataDir)
+
     local skip = {}
     for _, name in ipairs(UPDATE_SKIP_NAMES) do
         skip[fs.combine(root, name)] = true
@@ -299,6 +324,18 @@ local function deployFiles(dataDir, root, isUpdate)
     end
 
     writeRelease(root)
+
+    -- Remove the now-empty (or leftover) source folders.
+    if consume then
+        local function prune(path)
+            if fs.isDir(path) then
+                for _, n in ipairs(fs.list(path)) do prune(fs.combine(path, n)) end
+                if #fs.list(path) == 0 then fs.delete(path) end
+            end
+        end
+        prune(dataDir)
+    end
+    consume = false
 end
 
 -- Wipes the main computer's own storage for a truly fresh install
@@ -734,6 +771,8 @@ local function main()
     if not dataDir then
         print("Error: data/ folder not found.")
         print("Place install.lua and the data/ folder in the same directory.")
+        print("(data/ is deleted after a successful install to save space:")
+        print(" to update or repair, run webinstall again, or use: recovery)")
         return
     end
 

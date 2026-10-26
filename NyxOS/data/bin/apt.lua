@@ -367,6 +367,7 @@ local function runInstaller(pkgName, runPath, meta)
         variant = meta and meta.variant or nil,
         registryFolder = meta and meta.registryFolder or nil,
         depends = meta and meta.depends or nil,
+        service = meta and meta.service or nil,
     }
     nyxlib.saveManifest(manifest)
 
@@ -475,6 +476,23 @@ local function cmdInstall(source, variantArg)
             registryFolder = app._folder,
             uninstallScript = persistedUninstaller,
         })
+        if installed and serviceDef then
+            local svc = dofile("/lib/services.lua")
+            local okReg, regErr = svc.register({
+                name = serviceDef.name or pkgName,
+                program = serviceDef.program,
+                args = serviceDef.args,
+                description = serviceDef.description or app.description,
+                autostart = serviceDef.autostart ~= false,
+            })
+            if okReg then
+                print("Service '" .. (serviceDef.name or pkgName) .. "' registered"
+                    .. (serviceDef.autostart ~= false and " (starts at boot)" or "")
+                    .. ". Start it now: service start " .. (serviceDef.name or pkgName))
+            else
+                print("apt: could not register the service: " .. tostring(regErr))
+            end
+        end
         if fs.exists(tmpDir) then fs.delete(tmpDir) end
         if not installed and persistedUninstaller and fs.exists(persistedUninstaller) then
             fs.delete(persistedUninstaller)
@@ -613,6 +631,15 @@ local function cmdRemove(pkgName, mode, skipConfirm)
                 end
             end
         end
+    end
+
+    if entry.service then
+        local svc = dofile("/lib/services.lua")
+        for _, p in ipairs(svc.processes()) do
+            if p.kind == "service" and p.name == entry.service then svc.kill(p.pid) end
+        end
+        svc.unregister(entry.service)
+        print("Service '" .. entry.service .. "' removed.")
     end
 
     if fullClean then

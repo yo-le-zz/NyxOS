@@ -37,12 +37,49 @@ local function readLines(win, upTo)
     return lines
 end
 
--- capture.run(cmd) -> output (string), err (string or nil)
+-- Keeps only the last `maxLines` lines of a terminal text. A text box that
+-- keeps growing makes every redraw slower until the UI seems to ignore
+-- new commands.
+function capture.trim(text, maxLines)
+    maxLines = maxLines or 300
+    local count = 0
+    for _ in text:gmatch("\n") do count = count + 1 end
+    if count <= maxLines then return text end
+    local drop = count - maxLines
+    local pos = 1
+    for _ = 1, drop do
+        pos = text:find("\n", pos, true) + 1
+    end
+    return text:sub(pos)
+end
+
+-- True for the commands a text-box terminal handles itself.
+function capture.isClear(cmd)
+    cmd = (cmd or ""):match("^%s*(.-)%s*$")
+    return cmd == "clear" or cmd == "cls"
+end
+
+function capture.isExit(cmd)
+    return (cmd or ""):match("^%s*(.-)%s*$") == "exit"
+end
+
+-- capture.run(cmd [, ui]) -> output (string), err (string or nil)
 --   output : everything the command printed, one "\n" per line
 --   err    : set only if the command itself raised an error (a program
 --            that merely fails and prints its own message is not an error
 --            here -- that message is in `output`).
-function capture.run(cmd)
+--   ui     : optional { prompt = function(textSoFar, maskChar) -> string }.
+--            When a program asks for input (read(): a sudo password, an
+--            "apt remove? (y/n)", ...) the command is paused and ui.prompt
+--            is called with what has been printed so far; its return value
+--            is what the program reads. Without `ui`, read() returns "".
+--
+-- The command runs in its own coroutine driven from here, with the
+-- terminal redirected to the hidden window ONLY while it runs: between
+-- two events the real terminal is back, so a Basalt UI that keeps
+-- drawing while a long command waits is not painted into the buffer.
+-- Call this from a coroutine that may yield (basalt.schedule(...)).
+function capture.run(cmd, ui)
     local parent = term.current()
     local width = parent.getSize()
 
@@ -54,14 +91,66 @@ function capture.run(cmd)
         return "", (not ok) and tostring(err) or nil
     end
 
-    local previous = term.redirect(win)
-    local ok, result = pcall(shell.run, cmd)
-    local _, cursorY = win.getCursorPos()
-    term.redirect(previous)
+    local function snapshot()
+        local _, cursorY = win.getCursorPos()
+        return table.concat(readLines(win, math.min(MAX_LINES, cursorY)), "\n")
+    end
 
-    local lines = readLines(win, math.min(MAX_LINES, cursorY))
-    local text = table.concat(lines, "\n")
+    local PROMPT = {}
+    local co
+    local realRead = _G.read
+    -- Replacement for the global read(): only for the command's own
+    -- coroutine -- background jobs keep using the real one.
+    _G.read = function(replaceChar, ...)
+        if coroutine.running() == co then
+            return coroutine.yield(PROMPT, replaceChar)
+        end
+        return realRead(replaceChar, ...)
+    end
 
+    co = coroutine.create(function() return shell.run(cmd) end)
+
+    local ok, result = true, nil
+    local filter = nil
+    local event = {}
+    local done = false
+    while not done do
+        local previous = term.redirect(win)
+        local resumed, a, b = coroutine.resume(co, (table.unpack or unpack)(event))
+        term.redirect(previous)
+
+        if not resumed then
+            ok, result = false, a
+            done = true
+        elseif coroutine.status(co) == "dead" then
+            ok, result = true, a
+            done = true
+        elseif a == PROMPT then
+            local text = ""
+            if ui and ui.prompt then
+                local pok, answer = pcall(ui.prompt, snapshot(), b)
+                text = pok and tostring(answer or "") or ""
+            end
+            -- the typed answer is part of what the command printed
+            local previous2 = term.redirect(win)
+            print(b and string.rep(b, #text) or text)
+            term.redirect(previous2)
+            event = { text }
+            filter = nil
+        else
+            filter = a
+            repeat
+                event = { os.pullEventRaw() }
+            until filter == nil or event[1] == filter or event[1] == "terminate"
+            if event[1] == "terminate" then
+                ok, result = false, "Terminated"
+                done = true
+            end
+        end
+    end
+    _G.read = realRead
+
+    local text = snapshot()
     if not ok then
         return text, tostring(result)
     end

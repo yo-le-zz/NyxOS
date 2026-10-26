@@ -56,6 +56,33 @@ if not (":" .. shell.path() .. ":"):find(":/bin:", 1, true) then
     shell.setPath("/bin:" .. shell.path())
 end
 
+-- `command &` runs the command as a background job (see /lib/services.lua).
+-- Wrapped once, on the shell API table, so it works for the plain shell,
+-- the graphical shell and the desktop terminal alike.
+if not shell._nyxBackground then
+    local originalRun = shell.run
+    shell.run = function(...)
+        local line = table.concat({ ... }, " ")
+        local body = line:match("^(.-)%s*&%s*$")
+        if body and body:match("%S") then
+            local okSvc, svc = pcall(dofile, "/lib/services.lua")
+            if okSvc and svc and svc.scheduler() then
+                local pid, err = svc.spawn({ cmd = body })
+                if pid then
+                    print("[" .. pid .. "] " .. (body:match("^%s*(%S+)") or body) .. " running in the background")
+                    return true
+                end
+                printError("background: " .. tostring(err))
+                return false
+            end
+            printError("background jobs need the NyxOS scheduler (boot normally).")
+            return false
+        end
+        return originalRun(...)
+    end
+    shell._nyxBackground = true
+end
+
 -- Fake /dev/null and /dev/zero (see /lib/nyxlib.lua)
 local nyxlibEarlyOk, nyxlibEarly = pcall(dofile, "/lib/nyxlib.lua")
 if nyxlibEarlyOk and nyxlibEarly then

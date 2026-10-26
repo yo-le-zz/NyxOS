@@ -1,8 +1,40 @@
 # Changelog
 
+## 1.0.4
+
+### Added
+- **Background processes**: `command &` / `bg command` start a background
+  job; `ps [-a]`, `jobs [pid]`, `kill`, `pkill`, `killall` and `top`
+  manage them. Jobs have their own hidden terminal (read it with
+  `jobs <pid>`) and survive Ctrl+T.
+- **Services**: `service start|stop|restart` act immediately, `service
+  add <name> <program>` registers any program as an autostart service, and
+  a service can now be a plain program (`program = "/x/main.lua"`), which
+  is what server installs need. `app.json` server variants can declare a
+  `service` block that `apt install` registers (and `apt remove` removes).
+- **`specs`** command (storage, peripherals, network, Lua heap, uptime...).
+- **Task Manager** rewritten: every process, service (running or stopped),
+  and system part (display, network, filesystem, desktop...), with
+  Kill/Start/Stop/Enable/Disable, a Specs page and a Power page.
+
+### Fixed
+- `sudo apt install ...` (and any command that asks a question) did not
+  work in the graphical shell / desktop terminal. Questions and password
+  prompts now appear in the input line (passwords masked) while the
+  command waits; the interface no longer freezes during a command.
+- The desktop's Terminal app is now the exact same UI as the graphical
+  shell (tabs, history, clear/exit), just smaller.
+
 ## 1.0.3
 
 ### Fixed
+- **Desktop**: clicking an icon or a Start-menu entry crashed with `attempt to call method 'hide' (a nil value)` (Basalt has no `hide()`); screens are now swapped with `setVisible` and old ones destroyed. Icons are rounded and use text labels instead of `[x]`.
+- **Terminals (desktop + graphical shell)**: `clear`/`cls` now clear the text box, `exit` closes the tab (or leaves the shell), a red `x` button closes a tab, and the output is capped to the last 300 lines so the terminal no longer stops accepting commands after many of them.
+- **`Out of space` during install** (`install.lua: Out of space` in
+  `fs.copy`): a computer has only ~1 MB and the downloaded `data/` folder
+  (500+ KB) was kept next to the installed copy. Source files are now
+  deleted as soon as they are copied (never on a disk), and a clear error
+  with the free space is shown if it still does not fit.
 - **Installer / web installer**: `webinstall` no longer looks for a
   `boot.json` in the repository (the installer generates it on the
   computer); HTTP errors are now told apart from "http disabled". The
