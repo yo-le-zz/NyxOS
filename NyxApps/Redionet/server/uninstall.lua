@@ -1,32 +1,11 @@
-local function isProtected(name)
-    return name == "rom"
-end
+-- RedioNet Server - uninstaller (NyxOS)
+-- Only removes RedioNet's own files. (The previous version wiped EVERY
+-- file on the computer except /rom.)
 
-local function deleteRecursive(path)
-    if isProtected(fs.getName(path)) then
-        return
-    end
-
-    if fs.isDir(path) then
-        for _, file in ipairs(fs.list(path)) do
-            deleteRecursive(fs.combine(path, file))
-        end
-    end
-
-    fs.delete(path)
-end
-
-
-print("Suppression du systeme...")
-
-for _, file in ipairs(fs.list("/")) do
-    if not isProtected(file) then
-        deleteRecursive("/" .. file)
+for _, path in ipairs({ "/lib/redionet-server", "/bin/redionet-server.lua", "/redionet-server.lua" }) do
+    if fs.exists(path) then
+        fs.delete(path)
+        print("Removed " .. path)
     end
 end
-
-print("Reset termine.")
-print("Redemarrage...")
-
-sleep(2)
-os.reboot()
+print("RedioNet Server uninstalled.")

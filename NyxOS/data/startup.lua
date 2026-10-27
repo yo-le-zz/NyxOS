@@ -167,6 +167,18 @@ local function runInteractiveShell()
         uiMode = cfg.uiMode or "shell"
     end
 
+    if uiMode == "server" then
+        -- Headless-style server: plain text shell, services keep running
+        -- in the background (see runWithShell).
+        term.setBackgroundColor(colors.black)
+        term.setTextColor(colors.white)
+        term.clear()
+        term.setCursorPos(1, 1)
+        print("NyxOS server mode - services running in the background (ps, service).")
+        shell.run("shell")
+        return
+    end
+
     if uiMode == "desktop" then
         local desktopOk, desktop = pcall(dofile, "/lib/desktop.lua")
         if desktopOk and desktop then

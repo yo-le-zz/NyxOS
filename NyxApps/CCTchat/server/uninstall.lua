@@ -27,7 +27,7 @@ if answer == "o" or answer == "O" then
     if fs.exists(installDir) then fs.delete(installDir) end
     print("CCTchat Serveur et ses donnees ont ete supprimes.")
 else
-    if fs.exists(fs.combine(installDir, "libs")) then fs.delete(fs.combine(installDir, "libs")) end
+    if fs.exists(fs.combine(installDir, "lib")) then fs.delete(fs.combine(installDir, "lib")) end
     if fs.exists(fs.combine(installDir, "main.lua")) then fs.delete(fs.combine(installDir, "main.lua")) end
     print("CCTchat Serveur desinstalle, la base de donnees a ete conservee dans " .. installDir .. "/data")
 end

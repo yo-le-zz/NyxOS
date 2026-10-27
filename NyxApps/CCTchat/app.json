@@ -1,27 +1,48 @@
 {
     "name": "cctchat",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Client de discussion réseau pour CC:Tweaked.",
-
     "author": "yo-le-zz",
-
     "type": [
         "client",
         "server"
     ],
-
     "client": {
         "entry": "cct-client.lua",
         "installer": "install.lua",
-        "uninstaller": "uninstall.lua"
+        "uninstaller": "uninstall.lua",
+        "launch": "cct-client",
+        "icon": {
+            "color": "lime",
+            "art": [
+                " ____ ",
+                "| .. |",
+                "|_\\__|"
+            ]
+        }
     },
-
     "server": {
-        "entry": "startup.lua",
+        "entry": "main.lua",
         "installer": "install.lua",
-        "uninstaller": "uninstall.lua"
+        "uninstaller": "uninstall.lua",
+        "icon": {
+            "color": "green",
+            "art": [
+                " ____ ",
+                "|[__]|",
+                "|_()_|"
+            ]
+        },
+        "service": {
+            "name": "cctchat",
+            "program": "/cctchat-serv/main.lua",
+            "args": [
+                "Server"
+            ],
+            "autostart": true,
+            "description": "CCTchat chat server"
+        }
     },
-
     "permissions": [
         "rednet",
         "filesystem"

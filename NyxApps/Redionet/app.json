@@ -1,24 +1,43 @@
 {
     "name": "redionet",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Client de streaming musical synchronisé pour CC:Tweaked.",
-
     "author": "rypo",
-
     "type": [
         "client",
         "server"
     ],
-
     "client": {
         "entry": "client.lua",
         "installer": "install.lua",
-        "uninstaller": "uninstall.lua"
+        "uninstaller": "uninstall.lua",
+        "launch": "redionet",
+        "icon": {
+            "color": "pink",
+            "art": [
+                " (( ) ",
+                "  ||  ",
+                " /__\\ "
+            ]
+        }
     },
-
     "server": {
-        "entry": "startup.lua",
+        "entry": "main.lua",
         "installer": "install.lua",
-        "uninstaller": "uninstall.lua"
+        "uninstaller": "uninstall.lua",
+        "icon": {
+            "color": "magenta",
+            "art": [
+                " (( ) ",
+                "  ||  ",
+                "[====]"
+            ]
+        },
+        "service": {
+            "name": "redionet",
+            "program": "/lib/redionet-server/main.lua",
+            "autostart": true,
+            "description": "RedioNet music server"
+        }
     }
 }

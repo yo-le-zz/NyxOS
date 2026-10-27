@@ -85,6 +85,12 @@ local function withTrackedFs(fn)
         return handle
     end
     fs.copy = function(src, dst)
+        -- fs.copy refuses to overwrite ("File exists"), which made every
+        -- re-install / `apt update` of a package crash. An installer that
+        -- copies a file expects it to end up there, so replace it.
+        if fs.exists(dst) and not fs.isDir(dst) and not fs.isDir(src) then
+            orig.delete(dst)
+        end
         orig.copy(src, dst)
         written[normalize(dst)] = true
     end
@@ -467,7 +473,15 @@ local function cmdInstall(source, variantArg)
             end
         end
 
+        -- Server variants can describe a background service in app.json:
+        --   "service": { "name": "chat", "program": "/chat/main.lua",
+        --                "args": ["Server1"], "autostart": true }
+        -- It is registered after a successful install (see /lib/services.lua).
+        local serviceDef = type(variantDef.service) == "table" and variantDef.service or nil
         local installed = runInstaller(pkgName, installerPath, {
+            service = serviceDef and (serviceDef.name or pkgName) or nil,
+            launch = variantDef.launch,
+            icon = variantDef.icon,
             source = "nyxapps:" .. app._folder,
             version = app.version,
             description = app.description,
@@ -560,6 +574,8 @@ local function cmdInstall(source, variantArg)
         version = control and control.version,
         description = control and control.description,
         depends = control and control.depends,
+        launch = control and control.launch,
+        icon = control and control.icon,
     })
 
     if tempFile and fs.exists(tempFile) then

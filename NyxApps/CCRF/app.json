@@ -1,17 +1,23 @@
 {
     "name": "ccrf",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Outil de restauration usine ComputerCraft",
-
     "author": "yo-le-zz",
-
     "type": [
         "client"
     ],
-
     "client": {
         "entry": "ccrf.lua",
         "installer": "install.lua",
-        "uninstaller": "uninstall.lua"
+        "uninstaller": "uninstall.lua",
+        "launch": "ccrf",
+        "icon": {
+            "color": "red",
+            "art": [
+                "  /\\  ",
+                " /!!\\ ",
+                "/____\\"
+            ]
+        }
     }
 }

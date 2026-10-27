@@ -18,21 +18,21 @@ Chaque version fait l'objet d'un zip livré séparément.
 - [x] Task Manager : tous les processus/services/parties système (display, network,
       filesystem, desktop…) + page Specs + page Power
 
-## 1.1.0 — Bureau : icônes, dossiers, apps
-- [ ] Icônes déplaçables : 1 clic = sélection + glisser-déposer, 2 clics = lancer
-- [ ] Positions des icônes sauvegardées (`~/.desktop-layout`)
-- [ ] Les dossiers/fichiers de `~/Desktop` apparaissent à côté des apps
-- [ ] Icônes avec des formes différentes par app (pictogrammes en blocs CC)
-- [ ] Files : renommer (pop-up), nouveau dossier (pop-up), supprimer (pop-up), couleurs
-      par type de fichier, glisser vers le bureau
-- [ ] Settings : page centrée, plus de couleurs, **changer le mot de passe**, hostname,
+## 1.1.0 — Bureau : icônes, dossiers, apps ✅ (livrée)
+- [x] Icônes déplaçables : 1 clic = sélection + glisser-déposer, 2 clics = lancer
+- [x] Positions des icônes sauvegardées (`~/.desktop-layout`)
+- [x] Les dossiers/fichiers de `~/Desktop` apparaissent à côté des apps
+- [x] Icônes avec des formes différentes par app (pictogrammes en blocs CC)
+- [x] Files : renommer (pop-up), nouveau dossier (pop-up), supprimer (pop-up), couleurs
+      par type de fichier (glisser vers le bureau : reporté)
+- [x] Settings : page centrée, plus de couleurs, **changer le mot de passe**, hostname,
       thème, mode d'interface (shell/desktop/server), repo + auto-update (voir 1.2.0)
-- [ ] Packages : bouton **Lancer**, installer/désinstaller, mettre à jour
-- [ ] Icônes des packages installés sur le bureau
-- [ ] **Tous les packages existants** (CCRF, CCTchat, Redionet) : `app.json` avec `icon`,
+- [x] Packages : bouton **Lancer**, installer/désinstaller, mettre à jour
+- [x] Icônes des packages installés sur le bureau
+- [x] **Tous les packages existants** (CCRF, CCTchat, Redionet) : `app.json` avec `icon`,
       `launch`, `service` (serveurs), nettoyer leurs installeurs (plus de fichiers
       jetés à la racine `/`)
-- [ ] Menu Démarrer : apps + packages installés, recherche
+- [x] Menu Démarrer : apps, Exit to shell, Reboot, Shutdown (recherche : reporté)
 - [ ] Fenêtres multiples ((?) à décider : plusieurs apps en même temps sur le bureau)
 
 ## 1.2.0 — Mises à jour automatiques
@@ -76,7 +76,7 @@ Chaque version fait l'objet d'un zip livré séparément.
 - [ ] Installation sur disque : réécriture des chemins sous NyxLoader (limite connue)
 - [ ] Priorités de processus, `nice`, limites de ressources
 - [ ] IPC simple entre processus (files de messages)
-- [ ] Mode serveur sans interface (`guimode server`) : services + shell texte
+- [x] Mode serveur sans interface (`guimode server`) : services + shell texte
 - [ ] Tests automatisés (simulateur CC:Tweaked) dans le dépôt
 - [ ] Documentation complète (`docs/`) pour chaque sous-système
 

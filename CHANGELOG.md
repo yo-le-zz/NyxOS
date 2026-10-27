@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.1.0
+
+### Added
+- **Desktop rewritten**: icons can be moved (click + drag, snapped to a
+  grid, positions saved in `~/.desktop-layout`) and launched with a
+  double click; several pages when there are many icons; right-click menus.
+- Folders and files of `~/Desktop` appear next to the apps (open, rename,
+  delete, "New folder / New file" from the desktop menu).
+- **Installed packages get a desktop icon** (from `launch` / `icon` in the
+  manifest) and are launchable from the Packages app.
+- **Pop-up dialogs** (rename, new folder/file, delete / uninstall confirmation).
+- **Files** app: colours by file type, rename / new / delete, Home and Desktop shortcuts.
+- **Packages** app: Installed tab (Launch, Update, Remove, Purge) and a
+  registry Browse tab with search + Install.
+- **Settings** app, centered, four pages: General (hostname, boot
+  interface), Account (**change password**), Look (accent colour, desktop
+  background), System.
+- Start menu: all apps, Exit to shell, Reboot, Shutdown.
+- `guimode server`: text shell + autostart services, no graphical UI.
+
+### Changed
+- CCRF, CCTchat and Redionet `app.json` declare `launch`, `icon` and
+  server `service`; their installers no longer write to `/`.
+
 ## 1.0.4
 
 ### Added

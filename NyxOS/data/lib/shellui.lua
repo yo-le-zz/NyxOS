@@ -114,7 +114,7 @@ function shellui.mount(basalt, main, opts)
                     return motd .. "\n\n"
                 end
             end
-            return "NyxOS Graphical Shell v1.0.4\nType 'help' for the command list, or 'man' for the manual.\n\n"
+            return "NyxOS Graphical Shell v1.1.0\nType 'help' for the command list, or 'man' for the manual.\n\n"
         end
 
         local redrawTabBar
@@ -345,6 +345,11 @@ function shellui.mount(basalt, main, opts)
 
         cmdInput:setFocused(true)
 
+    -- Lets the embedding UI run a command in the active tab (e.g. the
+    -- desktop's "Run" / "apt install" buttons).
+    return {
+        execute = function(cmd) executeCommand(cmd) end,
+    }
 end
 
 -- Main graphical shell

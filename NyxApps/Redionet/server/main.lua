@@ -425,6 +425,6 @@ parallel.waitForAny(
     network.handle_http_download
 )
 
-if     on_exit == 'reload' then shell.run('server')
+if     on_exit == 'reload' then shell.run('redionet-server')
 elseif on_exit == 'reboot' then os.reboot()
 end

@@ -9,7 +9,10 @@ local function copyDir(src, dst)
         local d = fs.combine(dst, name)
         if fs.isDir(s) then
             copyDir(s, d)
-        elseif not fs.exists(d) then
+        else
+            -- libraries are always refreshed; data/ is only copied when new
+            -- (see below), so existing accounts are never overwritten.
+            if fs.exists(d) then fs.delete(d) end
             fs.copy(s, d)
         end
     end
@@ -29,7 +32,7 @@ else
     fs.makeDir(installDir)
 end
 
-copyDir(fs.combine(baseDir, "libs"), fs.combine(installDir, "libs"))
+copyDir(fs.combine(baseDir, "lib"), fs.combine(installDir, "lib"))
 
 if not fs.exists(fs.combine(installDir, "data")) then
     copyDir(fs.combine(baseDir, "data"), fs.combine(installDir, "data"))
@@ -38,6 +41,7 @@ else
     print("Dossier data existant conserve (comptes deja presents).")
 end
 
+if fs.exists(fs.combine(installDir, "main.lua")) then fs.delete(fs.combine(installDir, "main.lua")) end
 fs.copy(fs.combine(baseDir, "main.lua"), fs.combine(installDir, "main.lua"))
 
 local f = fs.open("/cct-serv", "w")
