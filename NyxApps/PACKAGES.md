@@ -52,7 +52,7 @@ Only declare the variants listed in `type` (and give them a folder).
     - `install.lua`
     - `uninstall.lua`
 
-# 🖥️ Desktop & server integration (NyxOS 1.1.0+)
+# 🖥️ Desktop & server integration (NyxOS 1.1.0+, pixel icons 1.1.1+)
 
 Each variant (`client` / `server`) of `app.json` may also declare:
 
@@ -62,7 +62,17 @@ Each variant (`client` / `server`) of `app.json` may also declare:
     "installer": "install.lua",
     "uninstaller": "uninstall.lua",
     "launch": "ccrf",
-    "icon": { "color": "red", "art": ["  /\\  ", " /!!\\ ", "/____\\"] }
+    "icon": {
+        "palette": { "r": "red", "w": "white" },
+        "pixels": [
+            ".......rr.......",
+            "......rrrr......",
+            "......rwwr......",
+            ".....rrwwrr.....",
+            "....rrrrrrrr....",
+            "....rrrwwrrr...."
+        ]
+    }
 },
 "server": {
     "service": {
@@ -77,8 +87,16 @@ Each variant (`client` / `server`) of `app.json` may also declare:
 
 - `launch`: the shell command that starts the app. The desktop shows an
   icon for the installed package and the Packages app gets a **Launch** button.
-- `icon.color`: a colour name (`red`, `lime`, `cyan`, `orange`...).
-  `icon.art`: three strings of 6 characters drawn on the icon.
+- `icon`: **the app draws its icon as pixels, NyxOS renders it** (like
+  MineOS icons). `pixels` = rows of up to 16 x 9 pixels (one character per
+  pixel, `.` or space = transparent), `palette` maps each character to a
+  colour name (`red`, `lime`, `lightBlue`...) or `#rrggbb` (mapped to the
+  nearest of the 16 screen colours). Smaller images are centred.
+  Each 2 x 3 block of pixels becomes one character, so a cell can show at
+  most two colours: keep details bold. Old `{ "color", "art" }` icons still work.
+  An installer can also register it from code:
+  `dofile("/lib/nyxapi.lua").registerIcon("name", { palette = ..., pixels = ... })`
+  (stored in `/etc/icons/<name>.lua`).
 - `service`: registered by `apt install` as a NyxOS service (see
   `service list`) and removed by `apt remove`. Servers run in the
   background, with no interface needed.

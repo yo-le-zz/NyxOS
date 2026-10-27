@@ -26,21 +26,6 @@ local function captureCommand(cmd)
     return dofile("/lib/capture.lua").run(cmd)
 end
 
-------------------------------------------------------------------
--- Icon art: three strings of 6 characters, drawn on a coloured 8x3
--- body with rounded corners (teletext characters 128-159).
-------------------------------------------------------------------
-local ART = {
-    Files    = { " ___  ", "/___\\_", "|____|" },
-    Terminal = { " ____ ", "|>_  |", "|____|" },
-    Packages = { " ____ ", "/ + /|", "|___|/" },
-    Tasks    = { " _  _ ", "| || |", "|_||_|" },
-    Settings = { " \\||/ ", "-(  )-", " /||\\ " },
-    folder   = { " ___  ", "/___\\_", "|____|" },
-    file     = { " ___  ", "|   \\ ", "|____|" },
-    package  = { " ____ ", "/ + /|", "|___|/" },
-}
-
 local function colorByName(name, fallback)
     if type(name) == "string" and palette[name] then return palette[name] end
     return fallback
@@ -81,6 +66,7 @@ local function runOnce()
     end
 
     local theme = dofile("/lib/theme.lua")
+    local iconlib = dofile("/lib/icon.lua")
     local accent = theme.accent()
     local nyxlib = dofile("/lib/nyxlib.lua")
     local config = nyxlib.loadTable("/etc/nyx-config.lua")
@@ -262,7 +248,6 @@ local function runOnce()
             table.insert(apps, {
                 name = name,
                 color = color,
-                art = ART[name],
                 launch = function(arg)
                     local area = newPanel()
                     activeLabel:setText(name)
@@ -299,7 +284,7 @@ local function runOnce()
             local items = {}
             for _, a in ipairs(apps) do
                 table.insert(items, {
-                    id = "app:" .. a.name, name = a.name, color = a.color, art = a.art,
+                    id = "app:" .. a.name, name = a.name, icon = iconlib.builtin[a.name],
                     open = function() a.launch() end, kind = "app",
                 })
             end
@@ -311,11 +296,11 @@ local function runOnce()
             table.sort(names)
             for _, name in ipairs(names) do
                 local entry = manifest[name]
-                local icon = type(entry.icon) == "table" and entry.icon or {}
                 table.insert(items, {
                     id = "pkg:" .. name, name = name, kind = "pkg", package = name,
-                    color = colorByName(icon.color, palette.green),
-                    art = type(icon.art) == "table" and icon.art or ART.package,
+                    icon = (iconlib.isPixel(entry.icon) and entry.icon) or iconlib.load(name)
+                        or (type(entry.icon) == "table" and (entry.icon.color or entry.icon.art) and entry.icon)
+                        or iconlib.builtin.package,
                     open = function() runOnTerminal(entry.launch) end,
                 })
             end
@@ -329,8 +314,7 @@ local function runOnce()
                         local isDir = fs.isDir(full)
                         table.insert(items, {
                             id = "fs:" .. full, name = name, kind = "fs", path = full, dir = isDir,
-                            color = isDir and palette.yellow or palette.white,
-                            art = isDir and ART.folder or ART.file,
+                            icon = isDir and iconlib.builtin.folder or iconlib.builtin.file,
                             open = function()
                                 if isDir then
                                     launchApp("Files", full)
@@ -464,23 +448,12 @@ local function runOnce()
             openMenu(x, y, entries)
         end
 
-        -- One icon = a frame: coloured body (rounded corners) + name
+        -- One icon = a frame: pixel image (see /lib/icon.lua) + name
         local function buildIcon(panel, it, x, y)
             local f = panel:addFrame():setPosition(x, y):setSize(10, 4):setBackground(desktopBg)
             it.frame = f
-            local c = it.color
-            local art = it.art or ART.package
-            for r = 1, 3 do
-                f:addLabel():setText(center(art[r] or "", 8)):setPosition(2, r)
-                    :setSize(8, 1):setBackground(c):setForeground(palette.black)
-            end
-            local function corner(cx, cy, ch, fg, bg)
-                f:addLabel():setText(ch):setPosition(cx, cy):setSize(1, 1):setForeground(fg):setBackground(bg)
-            end
-            corner(2, 1, "\159", desktopBg, c)
-            corner(9, 1, "\144", c, desktopBg)
-            corner(2, 3, "\130", c, desktopBg)
-            corner(9, 3, "\129", c, desktopBg)
+            local rows = iconlib.build(it.icon, config.desktopBg or "black")
+            f:addImage():setPosition(2, 1):setSize(8, 3):setBimg({ rows })
             it.nameLabel = f:addLabel():setText(center(it.name, 10)):setPosition(1, 4)
                 :setSize(10, 1):setBackground(desktopBg):setForeground(palette.white)
             return f

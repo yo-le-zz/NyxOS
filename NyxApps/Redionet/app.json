@@ -13,11 +13,23 @@
         "uninstaller": "uninstall.lua",
         "launch": "redionet",
         "icon": {
-            "color": "pink",
-            "art": [
-                " (( ) ",
-                "  ||  ",
-                " /__\\ "
+            "palette": {
+                "g": "gray",
+                "k": "black",
+                "l": "lime",
+                "w": "lightGray",
+                "o": "orange"
+            },
+            "pixels": [
+                "..............o.",
+                "............oo..",
+                "..........oo....",
+                "....gggggggggg..",
+                ".gggkkkkgggwwg..",
+                ".gggkllkgggwwg..",
+                ".gggkkkkgggwwg..",
+                ".gggggggggggggg.",
+                "................"
             ]
         }
     },

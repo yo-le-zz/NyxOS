@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.1
+
+### Added
+- **Pixel icons** (`/lib/icon.lua`): an app provides a small pixel image
+  (palette + rows, up to 16x9) in `app.json` (`icon`), in
+  `/etc/icons/<name>.lua` or through `nyxapi.registerIcon`; the desktop
+  renders it with sub-character pixels. Built-in icons for Files, Terminal,
+  Packages, Tasks, Settings, folders and files use the same system.
+- CCRF, CCTchat and Redionet ship their own pixel icon.
+
+### Changed
+- Desktop icons are drawn by one Basalt `Image` instead of many labels
+  (fewer elements to redraw).
+
 ## 1.1.0
 
 ### Added

@@ -12,11 +12,22 @@
         "uninstaller": "uninstall.lua",
         "launch": "ccrf",
         "icon": {
-            "color": "red",
-            "art": [
-                "  /\\  ",
-                " /!!\\ ",
-                "/____\\"
+            "palette": {
+                "r": "red",
+                "d": "#8a2a2a",
+                "w": "white",
+                "y": "yellow"
+            },
+            "pixels": [
+                "................",
+                ".......rr.......",
+                "......rrrr......",
+                "......rwwr......",
+                ".....rrwwrr.....",
+                ".....rrwwrr.....",
+                "....rrrrrrrr....",
+                "....rrrwwrrr....",
+                "...dddddddddd..."
             ]
         }
     }

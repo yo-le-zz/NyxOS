@@ -13,11 +13,21 @@
         "uninstaller": "uninstall.lua",
         "launch": "cct-client",
         "icon": {
-            "color": "lime",
-            "art": [
-                " ____ ",
-                "| .. |",
-                "|_\\__|"
+            "palette": {
+                "b": "blue",
+                "l": "lightBlue",
+                "w": "white"
+            },
+            "pixels": [
+                "................",
+                ".bbbbbbbbbbbbb..",
+                ".bllllllllllllb.",
+                ".blwwlwwlwwllb..",
+                ".bllllllllllllb.",
+                ".bbbbbbbbbbbbb..",
+                "...bbb..........",
+                "....bb..........",
+                "................"
             ]
         }
     },

@@ -14,7 +14,7 @@
 
 local nyxapi = {}
 
-nyxapi.VERSION = "1.1.0"
+nyxapi.VERSION = "1.1.1"
 
 local function lazy(path)
     local loaded = nil
@@ -58,6 +58,13 @@ end
 -- part of the system API: new event names can be introduced freely by
 -- any package.
 ------------------------------------------------------------------
+-- Registers the desktop icon of a package (a pixel icon, see /lib/icon.lua):
+--   nyxapi.registerIcon("mypackage", { palette = { r = "red" }, pixels = { "..rr..", ... } })
+-- It is stored in /etc/icons/<name>.lua and shown on the desktop.
+function nyxapi.registerIcon(name, def)
+    return dofile("/lib/icon.lua").save(name, def)
+end
+
 local listeners = {}
 
 function nyxapi.on(eventName, callback)

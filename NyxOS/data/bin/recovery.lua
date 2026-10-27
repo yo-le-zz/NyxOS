@@ -36,6 +36,7 @@ local FILES = {
     "data/lib/procui.lua",
     "data/lib/services.lua",
     "data/lib/specs.lua",
+    "data/lib/icon.lua",
     "data/lib/services/heartbeat.lua",
     "data/lib/shellui.lua",
     "data/lib/theme.lua",
