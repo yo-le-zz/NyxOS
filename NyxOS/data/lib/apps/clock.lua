@@ -18,6 +18,7 @@ local FONT = {
 return {
     id = "clock",
     name = "Clock",
+    multi = true,
     size = { 40, 12 },
     icon = {
         palette = { w = "white", k = "black", g = "lightGray", r = "red", b = "blue" },

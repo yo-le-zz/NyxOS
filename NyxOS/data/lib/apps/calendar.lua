@@ -2,6 +2,7 @@
 return {
     id = "calendar",
     name = "Calendar",
+    multi = true,
     size = { 49, 12 },
     icon = {
         palette = { r = "red", w = "white", k = "gray", o = "orange", g = "lightGray" },
@@ -26,7 +27,7 @@ return {
         local events = canSave and nyxlib.loadTable(path) or {}
 
         local function save()
-            if canSave then pcall(nyxlib.saveTable, path, events) end
+            if canSave then ctx.safe("calendar", nyxlib.saveTable, path, events) end
         end
 
         local MONTHS = { "January", "February", "March", "April", "May", "June", "July",

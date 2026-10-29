@@ -169,4 +169,12 @@ return {
   ["NyxOS %s is available (you have %s)."] = "NyxOS %s disponible (tienes %s).",
   ["NyxOS %s is available (you have %s). Install now?"] = "NyxOS %s disponible (tienes %s). ¿Instalar?",
   ["You are up to date (%s)."] = "Estás al día (%s).",
+  ["Folder"] = "Carpeta",
+  ["Open folder"] = "Abrir carpeta",
+  ["Select"] = "Elegir",
+  ["autosaved %s"] = "autoguardado %s",
+  ["Save the changes before closing?"] = "¿Guardar antes de cerrar?",
+  ["Window: %s"] = "Ventana: %s",
+  ["Closed."] = "Cerrado.",
+  ["Discard"] = "Descartar",
 }

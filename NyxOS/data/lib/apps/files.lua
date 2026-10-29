@@ -4,6 +4,7 @@ return {
     id = "files",
     name = "Files",
     system = true,
+    multi = true,
     color = "yellow",
     icon = icon.builtin.folder,
     build = function(area, ctx, startDir)
@@ -159,7 +160,7 @@ return {
             :setBackground(palette.lightBlue):setForeground(palette.black)
             :onClick(function()
                 local d = home .. "/Desktop"
-                if not fs.exists(d) then pcall(fs.makeDir, d) end
+                if not fs.exists(d) then ctx.safe("files", fs.makeDir, d) end
                 currentDir = d
                 refresh()
             end)

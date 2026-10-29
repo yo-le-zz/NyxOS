@@ -3,6 +3,7 @@
 return {
     id = "editor",
     name = "Code Editor",
+    multi = true,
     icon = {
         palette = { k = "#1c1c2c", g = "gray", c = "cyan", o = "orange", l = "lime", w = "lightGray" },
         pixels = {
@@ -20,7 +21,7 @@ return {
     build = function(area, ctx, arg)
         local t, palette, accent = ctx.t, ctx.palette, ctx.accent
         local aw, ah = area:getWidth(), area:getHeight()
-        local state = { path = nil, dirty = false }
+        local state = { path = nil, dirty = false, saved = "" }
 
         local function updateTitle()
             local name = state.path or t("untitled")
@@ -28,6 +29,7 @@ return {
         end
 
         local gutterW = 5
+        local sideW = 0           -- width of the folder sidebar (0 = hidden)
         local box = area:addTextBox():setPosition(gutterW + 1, 2):setSize(aw - gutterW, ah - 2)
             :setBackground(palette.black):setForeground(palette.white)
         local gutter = area:addTextBox():setPosition(1, 2):setSize(gutterW, ah - 2)
@@ -77,9 +79,21 @@ return {
             local cx, cy = 1, 1
             pcall(function() cx, cy = box:getCursorX(), box:getCursorY() end)
             status:setText((" " .. t("Ln %d, Col %d", cy, cx) .. "   " .. t("%d lines", count)
-                .. "   " .. (state.path or t("untitled"))):sub(1, aw))
+                .. "   " .. (state.path or t("untitled"))
+                .. (lastAuto and ("   " .. t("autosaved %s", lastAuto)) or "")):sub(1, aw))
         end
 
+        -- The text is compared with what was last loaded/saved: this does not
+        -- depend on which key events the text box reports.
+        local function refreshDirty()
+            local current = box:getText()
+            local changed = current ~= state.saved
+            if changed ~= state.dirty then
+                state.dirty = changed
+                updateTitle()
+            end
+            return changed
+        end
         local function markDirty()
             if not state.dirty then
                 state.dirty = true
@@ -103,7 +117,7 @@ return {
             f.close()
             box:setText(text)
             pcall(function() box:setCursorX(1); box:setCursorY(1); box:setScrollY(0) end)
-            state.path, state.dirty = path, false
+            state.path, state.dirty, state.saved = path, false, box:getText()
             lastCount = -1
             updateTitle()
             syncGutter()
@@ -111,11 +125,34 @@ return {
         local function saveTo(path)
             local f = fs.open(path, "w")
             if not f then ctx.message(t("Error"), t("Cannot write %s", path)) return false end
-            f.write(box:getText())
+            local text = box:getText()
+            f.write(text)
             f.close()
-            state.path, state.dirty = path, false
+            state.path, state.dirty, state.saved = path, false, text
             updateTitle()
             return true
+        end
+        -- Autosave: the file itself when it has a name, else a backup in ~/.autosave
+        local lastAuto = nil
+        local function autosave()
+            if not refreshDirty() then return end
+            local target = state.path
+            if not target then
+                if not ctx.home or not fs.exists(ctx.home) then return end
+                target = ctx.home .. "/.autosave/untitled.txt"
+            end
+            local dir = fs.getDir(target)
+            if dir ~= "" and not fs.exists(dir) then ctx.safe("editor", fs.makeDir, dir) end
+            local f = fs.open(target, "w")
+            if not f then
+                ctx.log("warn", "autosave failed: cannot write " .. target)
+                return
+            end
+            local text = box:getText()
+            f.write(text)
+            f.close()
+            if state.path then state.dirty, state.saved = false, text updateTitle() end
+            lastAuto = os.date("%H:%M:%S")
         end
         local function save(after)
             if state.path then
@@ -127,7 +164,7 @@ return {
             end
         end
         local function guard(action)
-            if state.dirty then
+            if refreshDirty() then
                 ctx.confirm(t("Unsaved changes"), t("Discard the changes?"), action)
             else
                 action()
@@ -143,7 +180,7 @@ return {
         x = toolbar(x, 5, t("New"), palette.lightGray, function()
             guard(function()
                 box:setText("")
-                state.path, state.dirty = nil, false
+                state.path, state.dirty, state.saved = nil, false, box:getText()
                 lastCount = -1
                 updateTitle()
             end)
@@ -160,6 +197,68 @@ return {
                 elseif state.path:match("%.nyx$") then ctx.openTerminal("nyx " .. state.path)
                 else ctx.message(t("Run"), t("Only .lua and .nyx files can be run.")) end
             end)
+        end)
+
+        -- Folder sidebar: "Folder" picks a directory, its files are listed on the
+        -- left, a click opens a file (asking before discarding changes).
+        local side, sideEntries, folder = nil, {}, nil
+        local function layoutBoxes()
+            box:setPosition(sideW + gutterW + 1, 2):setSize(aw - sideW - gutterW, ah - 2)
+            gutter:setPosition(sideW + 1, 2)
+        end
+        local refreshSide
+        local function showFolder(dir)
+            folder = dir
+            sideW = math.max(10, math.min(18, math.floor(aw / 3)))
+            if not side then
+                side = area:addList():setPosition(1, 2):setSize(sideW, ah - 2)
+                    :setBackground(palette.gray):setForeground(palette.white)
+                    :setSelectedBackground(accent):setSelectedForeground(palette.black)
+                side:onSelect(function(self, index)
+                    local e = sideEntries[index]
+                    if not e then return end
+                    if e.kind == "close" then
+                        side:setVisible(false)
+                        sideW = 0
+                        layoutBoxes()
+                    elseif e.kind == "dir" then
+                        folder = e.path
+                        ctx.basalt.schedule(function() sleep(0.05) refreshSide() end)
+                    else
+                        guard(function() loadFile(e.path) end)
+                    end
+                end)
+            end
+            side:setVisible(true):setSize(sideW, ah - 2)
+            refreshSide()
+            layoutBoxes()
+        end
+        function refreshSide()
+            side:clear()
+            sideEntries = { { kind = "close" } }
+            side:addItem({ text = "[x] " .. fs.getName(folder):sub(1, sideW - 5), fg = palette.cyan, selectedFg = palette.black })
+            if folder ~= "/" then
+                local parent = "/" .. fs.getDir(folder)
+                if parent == "/" or fs.getDir(folder) == "" then parent = "/" end
+                sideEntries[#sideEntries + 1] = { kind = "dir", path = parent }
+                side:addItem({ text = "..", fg = palette.yellow, selectedFg = palette.black })
+            end
+            local names = fs.list(folder)
+            table.sort(names, function(a, b)
+                local da, db = fs.isDir(fs.combine(folder, a)), fs.isDir(fs.combine(folder, b))
+                if da ~= db then return da end
+                return a:lower() < b:lower()
+            end)
+            for _, name in ipairs(names) do
+                local path = "/" .. fs.combine(folder, name)
+                local isDir = fs.isDir(path)
+                sideEntries[#sideEntries + 1] = { kind = isDir and "dir" or "file", path = path }
+                side:addItem({ text = (isDir and name .. "/" or name):sub(1, sideW - 1),
+                    fg = isDir and palette.yellow or palette.white, selectedFg = palette.black })
+            end
+        end
+        x = toolbar(x, 8, t("Folder"), palette.cyan, function()
+            ctx.pickFile({ title = t("Open folder"), mode = "dir", dir = folder or ctx.home }, showFolder)
         end)
 
         -- find
@@ -198,7 +297,28 @@ return {
             :setBackground(accent):setForeground(palette.black):onClick(find)
 
         updateTitle()
-        if type(arg) == "string" and fs.exists(arg) and not fs.isDir(arg) then loadFile(arg) end
+        if type(ctx.restoreState) == "table" then
+            local r = ctx.restoreState
+            box:setText(r.text or "")
+            state.path, state.saved = r.path, r.saved or ""
+            state.dirty = box:getText() ~= state.saved
+            pcall(function() box:setCursorX(r.cx or 1); box:setCursorY(r.cy or 1) end)
+            updateTitle()
+        elseif type(arg) == "string" and fs.exists(arg) and not fs.isDir(arg) then loadFile(arg) end
+        ctx.setSaver(function()
+            local cx, cy = 1, 1
+            pcall(function() cx, cy = box:getCursorX(), box:getCursorY() end)
+            return { text = box:getText(), path = state.path, saved = state.saved, cx = cx, cy = cy }
+        end)
+        -- closing with unsaved changes: Save / Discard / Cancel
+        ctx.setGuard(function()
+            if not refreshDirty() then return false end
+            ctx.dialog({ title = t("Unsaved changes"), text = t("Save the changes before closing?"),
+                ok = "Save", cancel = "Discard", third = "Cancel",
+                onOk = function() save(function() ctx.closeWindow(true) end) end,
+                onCancel = function() ctx.closeWindow(true) end })
+            return true
+        end)
         syncGutter()
         ctx.focus(box)
 
@@ -208,6 +328,16 @@ return {
                 sleep(0.15)
                 if not ctx.alive() then return end
                 syncGutter()
+                refreshDirty()
+            end
+        end)
+        ctx.basalt.schedule(function()
+            while true do
+                local okR, res = pcall(dofile, "/lib/resources.lua")
+                sleep(okR and res.budget().autosave or 30)
+                if not ctx.alive() then return end
+                local okA, errA = pcall(autosave)
+                if not okA then ctx.log("warn", "autosave: " .. tostring(errA)) end
             end
         end)
     end,

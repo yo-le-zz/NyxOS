@@ -2,6 +2,7 @@
 return {
     id = "notes",
     name = "Notes",
+    multi = true,
     icon = {
         palette = { y = "yellow", k = "#8a7a30", r = "red", g = "gray" },
         pixels = {
@@ -24,7 +25,7 @@ return {
             area:addLabel():setText(t("Notes need a home folder.")):setPosition(2, 3):setForeground(palette.red)
             return
         end
-        if not fs.exists(dir) then pcall(fs.makeDir, dir) end
+        if not fs.exists(dir) then ctx.safe("notes", fs.makeDir, dir) end
 
         ctx.setTitle(t("Notes"))
 

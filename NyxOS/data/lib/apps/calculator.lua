@@ -2,6 +2,7 @@
 return {
     id = "calculator",
     name = "Calculator",
+    multi = true,
     size = { 37, 15 },
     icon = {
         palette = { g = "gray", k = "black", l = "lime", o = "orange", w = "lightGray" },

@@ -19,16 +19,30 @@ local updater = {}
 updater.DEFAULT_REPO = "yo-le-zz/NyxOS"
 local STATE = "/etc/nyx-update.lua"
 
-local function loadTable(path)
-    if not fs.exists(path) or fs.isDir(path) then return {} end
-    local ok, data = pcall(dofile, path)
-    return (ok and type(data) == "table") and data or {}
+local function readData(path)
+    if not fs.exists(path) or fs.isDir(path) then return nil end
+    local f = fs.open(path, "r")
+    if not f then return nil end
+    local content = f.readAll()
+    f.close()
+    -- data files are written with textutils.serialize ({...}); packs are
+    -- Lua chunks ("return {...}"): accept both
+    local ok, data = pcall(textutils.unserialize, content)
+    if ok and type(data) == "table" then return data end
+    local fn = load(content, path, "t", {})
+    if fn then
+        local ok2, res = pcall(fn)
+        if ok2 and type(res) == "table" then return res end
+    end
+    return nil
 end
+
+local function loadTable(path) return readData(path) or {} end
 
 local function saveTable(path, data)
     local f = fs.open(path, "w")
     if not f then return false end
-    f.write("return " .. textutils.serialize(data))
+    f.write(textutils.serialize(data))
     f.close()
     return true
 end

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.1
+
+### Fixed
+- **Language could not be set**: the config file was written in a format the
+  language loader could not read (same bug for the update settings).
+- Windows are easier to move: dragging no longer stalls over lists / text
+  boxes (global drag hook).
+- Running apps now appear in the Task Manager (and can be closed from it).
+- Every app except Settings/Tasks/Packages can be opened several times.
+- Silent failures are logged (`logger.pcall`, `ctx.safe`); the editor no longer
+  relies on key events to know the text changed.
+
+### Added
+- Logs: arrow keys (up/down/left/right), PageUp/PageDown, Home/End, wheel.
+- Code Editor: **Folder** sidebar, Save / Discard / Cancel when closing with
+  unsaved changes, **autosave** (the file, or `~/.autosave` for untitled text).
+- **Adaptive resources** (`/lib/resources.lua`, `resources` command): log
+  size, terminal history, caches and autosave follow the real storage, and are
+  recomputed every 30 s, so a larger disk after the install is used at once;
+  when space runs low the desktop frees caches and temporary files.
+
 ## 1.3.0
 
 ### Added

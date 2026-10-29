@@ -114,6 +114,28 @@ local function runOnce()
         local errorLabel = taskbar:addLabel()
             :setText(""):setForeground(palette.red):setPosition(w - 12, 1):setSize(3, 1)
 
+        -- Storage watch: limits follow the real capacity (it may grow after the
+        -- install); when space runs low, caches and temporary files are freed.
+        basalt.schedule(function()
+            local lastPressure = "ok"
+            while true do
+                local okR, res = pcall(dofile, "/lib/resources.lua")
+                if okR then
+                    local b = res.budget(true)
+                    if b.pressure ~= "ok" then
+                        local freed = res.cleanup(b.pressure == "critical")
+                        logger.warn("resources", string.format("storage %s (%d bytes free): cleanup freed %d bytes",
+                            b.pressure, res.free(), freed))
+                        if b.pressure == "critical" and lastPressure ~= "critical" then
+                            errorFlash = os.epoch("utc")
+                        end
+                    end
+                    lastPressure = b.pressure
+                end
+                sleep(120)
+            end
+        end)
+
         -- Update notice (checked in the background, see /lib/updater.lua)
         local updateInfo = nil
         local updateButton = taskbar:addButton()
@@ -185,7 +207,7 @@ local function runOnce()
             closeDialog()
             sweep()
             local dtitle, dtext = t(opts.title or ""), t(opts.text or "")
-            local dw = math.min(w - 2, math.max(32, #dtext + 4))
+            local dw = math.min(w - 2, math.max(opts.third and 38 or 32, #dtext + 4))
             local dh = opts.input and 9 or 7
             local dx, dy = math.floor((w - dw) / 2) + 1, math.floor((h - dh) / 2)
             local d = main:addFrame()
@@ -217,6 +239,14 @@ local function runOnce()
             if opts.cancel ~= false then
                 d:addButton():setText(t(opts.cancel or "Cancel")):setPosition(14, by):setSize(10, 1)
                     :setBackground(palette.lightGray):setForeground(palette.black)
+                    :onClick(function()
+                        closeDialog()
+                        if opts.onCancel then opts.onCancel() end
+                    end)
+            end
+            if opts.third then
+                d:addButton():setText(t(opts.third)):setPosition(26, by):setSize(10, 1)
+                    :setBackground(palette.gray):setForeground(palette.white)
                     :onClick(closeDialog)
             end
             if inputBox then
@@ -351,10 +381,20 @@ local function runOnce()
             return best
         end
 
-        local function closeWindow(win)
+        local function closeWindow(win, force)
             if not win or win.closed then return end
+            -- an app may veto the close (unsaved work): its guard shows a
+            -- dialog and returns true; it closes the window itself later
+            if not force and win.guard then
+                local okG, veto = pcall(win.guard)
+                if okG and veto then
+                    focusWindow(win)
+                    return
+                end
+            end
             win.closed = true
             if win.onClose then pcall(win.onClose) end
+            for _, fn in ipairs(win.closers or {}) do logger.try("close:" .. tostring(win.app.id), fn) end
             retire(win.frame)
             for i, other in ipairs(windows) do
                 if other == win then table.remove(windows, i) break end
@@ -448,7 +488,7 @@ local function runOnce()
                 local saved = win.saver and win.saver() or nil
                 local wasMax = win.maximized
                 local ox, oy = win.x, win.y
-                closeWindow(win)
+                closeWindow(win, true)
                 local newWin = openWindow(app, arg, {
                     maximized = not wasMax, force = true, restore = saved,
                     x = wasMax and (win.restoreX or ox) or nil, y = wasMax and (win.restoreY or oy) or nil,
@@ -467,7 +507,7 @@ local function runOnce()
                     local saved = win.saver and win.saver() or nil
                     local wasMax = win.maximized
                     local ox, oy = win.x, win.y
-                    closeWindow(win)
+                    closeWindow(win, true)
                     local newWin = openWindow(app, arg, {
                         maximized = not wasMax, force = true, restore = saved,
                         x = wasMax and (win.restoreX or ox) or nil, y = wasMax and (win.restoreY or oy) or nil,
@@ -488,11 +528,14 @@ local function runOnce()
                     paintBar(win)
                     refreshTaskbar()
                 end,
-                closeWindow = function() closeWindow(win) end,
+                closeWindow = function(force) closeWindow(win, force) end,
+                setGuard = function(fn) win.guard = fn end,
                 alive = function() return not win.closed end,
+                isActive = function() return activeWin == win and not win.minimized end,
                 visible = function() return not win.closed and not win.minimized end,
                 restoreState = opts.restore,
                 setSaver = function(fn) win.saver = fn end,
+                onClose = function(fn) win.closers = win.closers or {} table.insert(win.closers, fn) end,
             }, { __index = desktop._base })
 
             focusWindow(win)
@@ -501,7 +544,7 @@ local function runOnce()
                 app.build(body, ctx, arg)
             end)
             if not okBuild then
-                closeWindow(win)
+                closeWindow(win, true)
                 message("Error", t("%s crashed. See the Logs app.", t(app.name)))
                 return nil
             end
@@ -572,6 +615,7 @@ local function runOnce()
             local pathLabel = d:addLabel():setText(""):setPosition(2, 2):setSize(dw - 2, 1)
                 :setForeground(palette.lightGray)
             local save = opts.mode == "save"
+            local dirMode = opts.mode == "dir"
             local list = d:addList():setPosition(2, 3):setSize(dw - 2, dh - (save and 7 or 5))
                 :setBackground(palette.black):setForeground(palette.white)
                 :setSelectedBackground(accent):setSelectedForeground(palette.black)
@@ -613,6 +657,8 @@ local function runOnce()
                 elseif e.dir then
                     dir = "/" .. fs.combine(dir, e.name)
                     refresh()
+                elseif dirMode then
+                    -- files are only shown
                 elseif save then
                     nameInput:setText(e.name)
                 else
@@ -632,10 +678,12 @@ local function runOnce()
                 if save and not e.dir then nameInput:setText(e.name) end
             end)
             local by = dh - 1
-            d:addButton():setText(t(save and "Save" or "Open")):setPosition(2, by):setSize(10, 1)
+            d:addButton():setText(t(save and "Save" or (dirMode and "Select" or "Open"))):setPosition(2, by):setSize(10, 1)
                 :setBackground(accent):setForeground(palette.black)
                 :onClick(function()
-                    if save then
+                    if dirMode then
+                        choose(dir)
+                    elseif save then
                         local name = trim(nameInput:getText() or "")
                         if name == "" or name:find("/", 1, true) then return end
                         choose("/" .. fs.combine(dir, name))
@@ -655,8 +703,13 @@ local function runOnce()
             dialog = openDialog, message = message, confirm = confirm,
             pickFile = pickFile, openTerminal = openTerminal, runOnTerminal = runOnTerminal,
             launch = launchApp, restart = restart,
+            windows = function() return windows end,
+            closeWin = function(win) closeWindow(win) end,
+            focusWin = function(win) focusWindow(win) end,
             appModules = appModules,
             try = function(tag, fn, ...) return logger.try(tag, fn, ...) end,
+            log = function(level, text) pcall(logger.log, "app", level, tostring(text)) end,
+            safe = function(tag, fn, ...) return logger.pcall(tag, fn, ...) end,
             -- gives the focus to `element` once the click that opened the
             -- app has been fully dispatched (Basalt focuses the clicked
             -- element last, which would steal it back)
@@ -712,7 +765,7 @@ local function runOnce()
         local desktopPanel
 
         local function saveLayout()
-            if fs.exists(home) then pcall(nyxlib.saveTable, layoutPath, layout) end
+            if fs.exists(home) then logger.pcall("desktop", nyxlib.saveTable, layoutPath, layout) end
         end
 
         local function cellX(col) return (col - 1) * GW + 2 end
@@ -862,11 +915,11 @@ local function runOnce()
                 onOk = function(value)
                     value = validName(value)
                     if not value then message("Error", "Invalid name.") return end
-                    if not fs.exists(deskDir) then pcall(fs.makeDir, deskDir) end
+                    if not fs.exists(deskDir) then logger.pcall("desktop", fs.makeDir, deskDir) end
                     local dest = fs.combine(deskDir, value)
                     if fs.exists(dest) then message("Error", t("%s already exists.", value)) return end
                     if isDir then
-                        pcall(fs.makeDir, dest)
+                        logger.pcall("desktop", fs.makeDir, dest)
                     else
                         local f = fs.open(dest, "w")
                         if f then f.close() end
@@ -1000,10 +1053,10 @@ local function runOnce()
             highlight()
         end
 
-        -- Drag & drop (icons and windows) is tracked on the content frame,
-        -- which sees every drag event even after the pointer leaves the
-        -- element that started it.
-        content:onDrag(function(self, btn, x, y)
+        -- Drag & drop (icons and windows) is tracked with the global event hook:
+        -- widgets under the pointer (lists, text boxes...) swallow drag events,
+        -- the hook sees them all.
+        basalt.onEvent("mouse_drag", function(btn, x, y)
             if not drag then return end
             if drag.kind == "win" then
                 local win = drag.win
@@ -1026,7 +1079,7 @@ local function runOnce()
                 end
             end
         end)
-        content:onClickUp(function(self, btn, x, y)
+        basalt.onEvent("mouse_up", function(btn, x, y)
             if not drag then return end
             local d = drag
             drag = nil

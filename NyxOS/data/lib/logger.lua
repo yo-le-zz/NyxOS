@@ -10,7 +10,15 @@ local logger = {}
 
 local LOG_PATH = "/var/log/nyxos.log"
 local LOG_DIR = "/var/log"
-local MAX_SIZE = 64 * 1024 -- 64 KB before rotation
+local function maxSize()
+    -- follows the storage of the computer (see /lib/resources.lua)
+    local ok, res = pcall(dofile, "/lib/resources.lua")
+    if ok then
+        local okB, b = pcall(res.budget)
+        if okB and b then return b.logMax end
+    end
+    return 40 * 1024
+end
 
 local function ensureDir()
     if not fs.exists(LOG_DIR) then
@@ -19,12 +27,17 @@ local function ensureDir()
 end
 
 local function rotateIfNeeded()
-    if fs.exists(LOG_PATH) and fs.getSize(LOG_PATH) > MAX_SIZE then
+    if fs.exists(LOG_PATH) and fs.getSize(LOG_PATH) > maxSize() then
         local old = LOG_PATH .. ".1"
         if fs.exists(old) then
             fs.delete(old)
         end
         fs.move(LOG_PATH, old)
+        local okR, res = pcall(dofile, "/lib/resources.lua")
+        if okR then
+            local okB, b = pcall(res.budget)
+            if okB and b and not b.keepOldLog then fs.delete(old) end
+        end
     end
 end
 
@@ -58,6 +71,16 @@ end
 
 -- Runs fn(...) and logs any error with a traceback instead of letting it
 -- escape. Returns ok, result-or-error.
+-- Like pcall, but a failure is written to the log (WARN) instead of vanishing.
+function logger.pcall(tag, fn, ...)
+    local res = table.pack(pcall(fn, ...))
+    if not res[1] then
+        logger.log(tag, "warn", tostring(res[2]))
+        return false, res[2]
+    end
+    return true, res[2], res[3]
+end
+
 function logger.try(tag, fn, ...)
     local function handler(e)
         if debug and debug.traceback then

@@ -1,6 +1,6 @@
 # 🚀 NyxOS
 
-> ⚠️ **Current version: 1.3.0**
+> ⚠️ **Current version: 1.3.1**
 >
 > Adds a graphical desktop, boot.json + disk installs (chainloaded via
 > the separate [NyxLoader](https://github.com/yo-le-zz/NyxLoader) project),

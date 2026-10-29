@@ -63,6 +63,10 @@ function specs.collect()
         add("Free", fmtBytes(free))
     end
 
+    -- Adaptive limits (see /lib/resources.lua)
+    local b = safe(function() return dofile("/lib/resources.lua").budget() end)
+    if b then add("Resources", b.tier .. " tier, " .. b.pressure .. " space") end
+
     -- Memory (the Lua heap is the only RAM a program can see)
     if collectgarbage then
         local okGc, kb = pcall(collectgarbage, "count")

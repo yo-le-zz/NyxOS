@@ -261,7 +261,9 @@ local function downloadVariant(app, variant, destDir)
             return false, err or "Could not read the repository's file tree."
         end
         tree = data.tree
-        saveCache(TREE_CACHE_PATH, tree)
+        -- the cache is skipped on a very small / nearly full disk
+        local okR, res = pcall(dofile, "/lib/resources.lua")
+        if not okR or res.budget().treeCache then saveCache(TREE_CACHE_PATH, tree) end
     end
 
     local prefix = "NyxApps/" .. app._folder .. "/" .. variant .. "/"

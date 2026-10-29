@@ -45,20 +45,23 @@ return {
 
         local rows, selected = {}, nil
         local kindColor = { shell = palette.cyan, service = palette.lime, job = palette.yellow,
-            system = palette.lightGray, ui = palette.pink }
+            system = palette.lightGray, ui = palette.pink, app = palette.orange }
         local function refresh()
             list:clear()
             rows = {}
-            if not (servicesOk and services) then
-                info:setText(t("Service manager unavailable."))
-                return
-            end
             local running = {}
-            for _, p in ipairs(services.processes()) do
+            for _, p in ipairs((servicesOk and services) and services.processes() or {}) do
                 table.insert(rows, p)
                 if p.kind == "service" then running[p.name] = true end
             end
-            for _, def in ipairs(services.list()) do
+            -- desktop windows (apps)
+            if ctx.windows then
+                for _, w in ipairs(ctx.windows()) do
+                    table.insert(rows, { pid = 0, name = w.title, kind = "app", state = w.minimized and "hidden" or "open",
+                        user = ctx.username or "-", killable = true, win = w, description = t("Window: %s", w.app.name) })
+                end
+            end
+            for _, def in ipairs((servicesOk and services) and services.list() or {}) do
                 if not running[def.name] then
                     table.insert(rows, { pid = 0, name = def.name, kind = "service", state = "stopped",
                         user = "root", killable = false, description = def.description })
@@ -97,6 +100,7 @@ return {
         local by = ph - 1
         button("Kill", palette.red, palette.white, by, function()
             act(function(p)
+                if p.win then ctx.closeWin(p.win) return t("Closed.") end
                 if not p.killable then return t("%s cannot be killed here.", p.name) end
                 local _, msg = procui.killPid(p.pid)
                 return msg

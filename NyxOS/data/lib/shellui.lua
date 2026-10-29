@@ -114,7 +114,7 @@ function shellui.mount(basalt, main, opts)
                     return motd .. "\n\n"
                 end
             end
-            return "NyxOS Graphical Shell v1.3.0\nType 'help' for the command list, or 'man' for the manual.\n\n"
+            return "NyxOS Graphical Shell v1.3.1\nType 'help' for the command list, or 'man' for the manual.\n\n"
         end
 
         local redrawTabBar
@@ -274,7 +274,7 @@ function shellui.mount(basalt, main, opts)
                 if err then
                     tab.output = tab.output .. "Error: " .. tostring(err) .. "\n"
                 end
-                tab.output = capture.trim(tab.output .. "\n", 300)
+                tab.output = capture.trim(tab.output .. "\n", (function() local okR, r = pcall(dofile, "/lib/resources.lua") local okB, b = pcall(r.budget) return okB and b.shellLines or 300 end)())
 
                 if tab == activeTab then
                     outputBox:setText(tab.output)
