@@ -1,6 +1,6 @@
 # 🚀 NyxOS
 
-> ⚠️ **Current version: 1.1.1**
+> ⚠️ **Current version: 1.2.0**
 >
 > Adds a graphical desktop, boot.json + disk installs (chainloaded via
 > the separate [NyxLoader](https://github.com/yo-le-zz/NyxLoader) project),
@@ -269,10 +269,14 @@ recovery              # repairs core system files from GitHub, keeps your data
 desktop            # launch the desktop
 guimode desktop    # make it the default boot UI
 ```
-Taskbar (Start menu, clock), desktop icons, a Windows-style file
-explorer, an embedded terminal, an `apt` front-end, and a task manager
-with shutdown/reboot buttons. Apps fill the screen one at a time for
-now (switch via the taskbar) -- no floating windows yet.
+Floating windows with a title bar (move `+`, hide `_`, full screen `O`,
+close `X`; double-click the title to maximise), stacking, a taskbar button
+per window. Icons: click one for its menu, double-click to open, drag it --
+or click it then click an empty spot -- to move it. Apps (modules in
+`/lib/apps`): Files, Terminal, Packages, Tasks, Settings, Logs and the
+optional Calculator, Code Editor, Calendar, Clock, Notes. Errors never kick
+you out of the desktop: they go to `/var/log/nyxos.log` (`logs -e`, or the
+Logs app).
 
 ### 🥾 `boot.json` / disk installs
 NyxOS no longer owns `/startup.lua` directly -- it writes a `boot.json`

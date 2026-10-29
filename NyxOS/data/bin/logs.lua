@@ -3,6 +3,8 @@
 --   logs                 show the last 30 lines
 --   logs -n <N>           show the last N lines
 --   logs -t <tag>          show only lines from a given tag (e.g. "service")
+--   logs -e [N]           only errors and warnings (crashes with their traceback)
+--   logs -c               clear the log
 --   logs -f                follow the log in real time (Ctrl+T / q to stop)
 
 local logger = dofile("/lib/logger.lua")
@@ -15,6 +17,17 @@ local function printLines(lines)
     if #lines == 0 then
         print("(log is empty)")
     end
+end
+
+if args[1] == "-e" then
+    printLines(logger.errors(tonumber(args[2]) or 30))
+    return
+end
+
+if args[1] == "-c" then
+    logger.clear()
+    print("Log cleared.")
+    return
 end
 
 if args[1] == "-t" and args[2] then

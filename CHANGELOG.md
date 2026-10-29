@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.2.0
+
+### Added
+- **Floating windows** on the desktop: title bar with move / hide /
+  full screen / close, stacking and focus, taskbar buttons, double-click
+  the title to maximise.
+- **Default apps** (modules in `/lib/apps`): Calculator (full expression
+  parser, history), Code Editor (Lua/.nyx highlighting, find, run),
+  Calendar (events), Clock (clock, stopwatch, timer), Notes, Logs.
+  Files, Terminal, Packages, Tasks and Settings moved there too.
+- **Animated installer** (`/lib/installui.lua`): splash, language
+  selection, default-apps checklist and a progress screen.
+- **Language packs**: French, Spanish and German in `/etc/lang`
+  (`lang` command, Settings > Language).
+- `sleep`, `calc`, `lang`, `apps` commands; `logs -e` / `-c`.
+- Icons: click for a menu, click an icon then an empty spot to move it.
+- Basalt: `basalt.setErrorHandler(fn, soft)` so a UI error is logged and
+  the interface goes on.
+
+### Fixed
+- `top` / Task Manager crashed where `collectgarbage` is missing.
+- Files "Up" at the root crashed.
+- Errors inside the desktop dropped you back to the shell UI.
+- `sudo` password prompt in the graphical shell was answered by the Enter
+  that started the command ("incorrect" at once).
+- Packages without `launch` get a launcher guess; services show up on the desktop.
+
 ## 1.1.1
 
 ### Added

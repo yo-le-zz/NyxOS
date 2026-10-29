@@ -16,7 +16,12 @@ while true do
     if ev == "timer" and a == timer then
         term.clear()
         term.setCursorPos(1, 1)
-        print("NyxOS top -- press Q to quit    heap " .. string.format("%.0f", collectgarbage("count")) .. " KB")
+        local heap = ""
+        if collectgarbage then
+            local okGc, kb = pcall(collectgarbage, "count")
+            if okGc and type(kb) == "number" then heap = "    heap " .. string.format("%.0f", kb) .. " KB" end
+        end
+        print("NyxOS top -- press Q to quit" .. heap)
         print("")
         procui.print(procui.snapshot("all"))
         timer = os.startTimer(2)

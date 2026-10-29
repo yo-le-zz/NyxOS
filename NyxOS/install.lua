@@ -6,7 +6,7 @@
 -- installed/broken, a Recovery option repairs system files without
 -- touching your data (see also the standalone `recovery` command).
 
-local VERSION = "1.1.1"
+local VERSION = "1.2.0"
 local palette = colors or colours
 
 ------------------------------------------------------------------
@@ -126,7 +126,7 @@ local REQUIRED_SOURCES = {
     "startup.lua",
     "lib/nyxlib.lua", "lib/users.lua", "lib/crypto.lua", "lib/theme.lua",
     "lib/login.lua", "lib/display.lua", "lib/shellui.lua",
-    "bin/apt.lua",
+    "bin/apt.lua", "lib/i18n.lua", "lib/desktop.lua", "lib/logger.lua", "lib/icon.lua",
 }
 
 local function missingSources(dataDir)
@@ -206,6 +206,8 @@ end
 -- storage is deleted as soon as it has been copied, so the peak usage
 -- stays at one copy plus one file. Sources on a disk are never deleted.
 local consume = false
+local progressHook = nil
+local deployFinish = nil   -- set while a progress screen is shown
 
 local function onOwnStorage(path)
     local ok, drive = pcall(fs.getDrive, path)
@@ -227,6 +229,7 @@ local function copyFile(src, dst)
     if consume and onOwnStorage(src) and onOwnStorage(dst) then
         fs.delete(src)
     end
+    if progressHook then pcall(progressHook, dst) end
 end
 
 local function copyTree(src, dst, skip)
@@ -279,9 +282,21 @@ local UPDATE_SKIP_NAMES = {
 -- root: "" for the main computer, or a disk's mount path (e.g.
 -- "disk3") for a disk install -- everything is deployed under that
 -- prefix so a disk install is fully self-contained and portable.
-local function deployFiles(dataDir, root, isUpdate)
+local function deployFiles(dataDir, root, isUpdate, ui, t)
     root = root or ""
-    print(isUpdate and "Updating system files..." or "Installing files...")
+    t = t or function(s) return s end
+    if ui then
+        local total = 0
+        for _, sub in ipairs({ "bin", "lib", "etc/services", "etc/lang" }) do
+            total = total + ui.countFiles(fs.combine(dataDir, sub))
+        end
+        total = total + 3
+        local p = ui.progress(total, isUpdate and t("Updating system files...") or t("Installing files..."))
+        progressHook = function(dst) p.step(dst) end
+        deployFinish = p.finish
+    else
+        print(isUpdate and "Updating system files..." or "Installing files...")
+    end
 
     ensureDir(fs.combine(root, "bin"))
     ensureDir(fs.combine(root, "lib"))
@@ -300,6 +315,7 @@ local function deployFiles(dataDir, root, isUpdate)
     copyTree(fs.combine(dataDir, "bin"), fs.combine(root, "bin"), skip)
     copyTree(fs.combine(dataDir, "lib"), fs.combine(root, "lib"), skip)
     copyTree(fs.combine(dataDir, "etc/services"), fs.combine(root, "etc/services"), skip)
+    copyTree(fs.combine(dataDir, "etc/lang"), fs.combine(root, "etc/lang"), skip)
 
     -- The OS entry point: NyxLoader chainloads this via boot.json,
     -- instead of the OS owning /startup.lua directly.
@@ -324,6 +340,8 @@ local function deployFiles(dataDir, root, isUpdate)
     end
 
     writeRelease(root)
+    progressHook = nil
+    if deployFinish then deployFinish(); deployFinish = nil end
 
     -- Remove the now-empty (or leftover) source folders.
     if consume then
@@ -423,7 +441,7 @@ local function applyConfig(config, root)
 
         nyxlib.setHostname(config.hostname)
         theme.save({ name = config.themeName, accent = config.accent })
-        nyxlib.saveTable("/etc/nyx-config.lua", { gui = config.gui ~= false })
+        nyxlib.saveTable("/etc/nyx-config.lua", { gui = config.gui ~= false, lang = config.lang or "en", apps = config.apps })
 
         if users.count() == 0 then
             local ok, err = users.add(config.username, config.password, true)
@@ -447,7 +465,7 @@ local function applyConfig(config, root)
     f.close()
 
     nyxlib.saveTable(fs.combine(root, "etc/nyx-theme.lua"), { name = config.themeName, accent = config.accent })
-    nyxlib.saveTable(fs.combine(root, "etc/nyx-config.lua"), { gui = config.gui ~= false })
+    nyxlib.saveTable(fs.combine(root, "etc/nyx-config.lua"), { gui = config.gui ~= false, lang = config.lang or "en", apps = config.apps })
 
     local home = "home/" .. config.username
     ensureDir(fs.combine(root, home))
@@ -792,6 +810,28 @@ local function main()
 
     setupScreen(dataDir)
 
+    -- Animated screens (best effort: the plain installer works without them)
+    local ui
+    do
+        local uiPath = fs.combine(dataDir, "lib/installui.lua")
+        if fs.exists(uiPath) then
+            local okUi, lib = pcall(dofile, uiPath)
+            if okUi and type(lib) == "table" then ui = lib end
+        end
+    end
+    local chosenLang, chosenApps = "en", nil
+    local t = function(s) return s end
+    if ui then
+        pcall(ui.splash, VERSION)
+        local okLang, code = pcall(ui.chooseLanguage, dataDir)
+        if okLang and code then chosenLang = code end
+        local okI18n, i18n = pcall(dofile, fs.combine(dataDir, "lib/i18n.lua"))
+        if okI18n and type(i18n) == "table" then
+            pcall(i18n.use, chosenLang, fs.combine(dataDir, "etc/lang"))
+            t = i18n.t
+        end
+    end
+
     -- Only offer a choice of target for a brand new install -- updates
     -- and recovery always target the main computer's own existing
     -- install.
@@ -806,6 +846,12 @@ local function main()
     if alreadyInstalled then
         mode = looksBroken(root) and "recovery" or "update"
     end
+
+    if ui and freshInstall and not alreadyInstalled then
+        local okApps, apps = pcall(ui.chooseApps, dataDir, t)
+        if okApps then chosenApps = apps end
+    end
+    setupScreen(dataDir)
 
     local presets = loadThemePresets(dataDir)
     local basalt = loadBasalt(dataDir)
@@ -852,7 +898,9 @@ local function main()
         wipeExceptRom(keep)
     end
 
-    deployFiles(dataDir, root, config.update or alreadyInstalled)
+    config.lang = chosenLang
+    config.apps = chosenApps
+    deployFiles(dataDir, root, config.update or alreadyInstalled, ui, t)
 
     if not config.update and not alreadyInstalled then
         if not applyConfig(config, root) then

@@ -129,6 +129,11 @@ function capture.run(cmd, ui)
             local text = ""
             if ui and ui.prompt then
                 local pok, answer = pcall(ui.prompt, snapshot(), b)
+                if not pok then
+                    pcall(function() dofile("/lib/logger.lua").error("capture", "prompt failed: " .. tostring(answer)) end)
+                    ok, result = false, "prompt failed: " .. tostring(answer)
+                    done = true
+                end
                 text = pok and tostring(answer or "") or ""
             end
             -- the typed answer is part of what the command printed

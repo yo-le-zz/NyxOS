@@ -128,6 +128,10 @@ local pages = {
     },
     pkill = { "pkill <pattern>", "Stops every process whose name contains <pattern>." },
     killall = { "killall <name>", "Stops every process with exactly this name." },
+    sleep = { "sleep <seconds>", "Waits for <seconds> (decimals allowed, max 86400). Ctrl+T stops it. Try: bg sleep 200, then jobs." },
+    calc = { "calc <expression>", "Evaluates a maths expression: calc 2*(3+4), calc sin(30) --deg. Supports pi, e, sqrt, ^, %, ans." },
+    lang = { "lang [code]", "Shows the available language packs, or sets the language (en, fr, es, de...). Packs live in /etc/lang." },
+    apps = { "apps [enable|disable <id>]", "Lists the desktop apps and turns the optional ones on or off (Calculator, Code Editor, Calendar, Clock, Notes)." },
     top = { "top", "Live process list, refreshed every 2 seconds. Press Q to quit." },
     specs = { "specs", "Shows the machine specifications (storage, peripherals, network...)." },
     nyx = {

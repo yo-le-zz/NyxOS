@@ -33,9 +33,16 @@ Chaque version fait l'objet d'un zip livré séparément.
       `launch`, `service` (serveurs), nettoyer leurs installeurs (plus de fichiers
       jetés à la racine `/`)
 - [x] Menu Démarrer : apps, Exit to shell, Reboot, Shutdown (recherche : reporté)
-- [ ] Fenêtres multiples ((?) à décider : plusieurs apps en même temps sur le bureau)
 
-## 1.2.0 — Mises à jour automatiques
+## 1.2.0 — Fenêtres, apps par défaut, installateur, langues ✅ (livrée)
+- [x] Fenêtres flottantes : barre de titre, déplacer / cacher / plein écran / fermer, superposition
+- [x] Apps par défaut : calculatrice, éditeur de code, calendrier, horloge, notes, journaux
+- [x] Installateur animé : choix de la langue, des apps, progression
+- [x] Packs de langues fr / es / de, commande `lang`
+- [x] Logs système (erreurs Basalt, crashs d'apps), `sleep`, correctifs top / Files / sudo
+- [x] Icônes : clic = menu, clic puis clic vide = déplacer
+
+## 1.3.0 — Mises à jour automatiques
 - [ ] Lecture des tags GitHub (`vX.Y.Z`) — repo par défaut `yo-le-zz/NyxOS`
 - [ ] Repo configurable (`/etc/nyx-config.lua` → `updateRepo`, modifiable dans Settings)
 - [ ] Auto-update activable/désactivable dans Settings (+ fréquence)
@@ -45,7 +52,7 @@ Chaque version fait l'objet d'un zip livré séparément.
       jamais d'écrasement de `/etc` (users, config)
 - [ ] Respect du quota disque (1 Mo par défaut) : mise à jour fichier par fichier
 
-## 1.3.0 — Vrai réseau + SSH
+## 1.4.0 — Vrai réseau + SSH
 - [ ] `/etc/network.lua` : interface(s), IP statique/DHCP-like, masque, passerelle
 - [ ] `/etc/hosts` + serveur/clients **DNS** (service `dns`, résolution de noms → ID/IP)
 - [ ] Fichiers de configuration serveur (`/etc/servers/*.lua` : ip, dns, ports, services)
@@ -54,7 +61,7 @@ Chaque version fait l'objet d'un zip livré séparément.
 - [ ] Package **ssh** (client + serveur) : shell distant, `scp`, clés/mots de passe
 - [ ] Task Manager : état réseau détaillé
 
-## 1.4.0 — Variables d'environnement, mémoire virtuelle, éditeur
+## 1.5.0 — Variables d'environnement, mémoire virtuelle, éditeur
 - [ ] Variables d'environnement : `/etc/environment`, `~/.profile`, `export`, `env`,
       `unset`, `$VAR` dans le shell et dans `.nyx`
 - [ ] Mémoire virtuelle : fichier d'échange (swap) pour les gros jeux de données,
@@ -63,7 +70,7 @@ Chaque version fait l'objet d'un zip livré séparément.
       Lua/.nyx/Python/C, recherche, sauvegarde, exécution
 - [ ] Éditeur : numéros de ligne, auto-indentation, annuler/refaire
 
-## 1.5.0 — Langages externes (Python, C)
+## 1.6.0 — Langages externes (Python, C)
 - [ ] Registre d'interpréteurs `/etc/interpreters.lua` (`.py` → package python,
       `.c` → package c)
 - [ ] Hook shell : `python main.py` / `c main.c` → interpréteur du package
@@ -72,7 +79,7 @@ Chaque version fait l'objet d'un zip livré séparément.
       parse → exécution → traduction des appels système vers l'API NyxOS
 - [ ] Packages `python` et `c` : squelettes (le vrai interpréteur viendra plus tard)
 
-## 1.6.0 — Robustesse et finitions
+## 1.7.0 — Robustesse et finitions
 - [ ] Installation sur disque : réécriture des chemins sous NyxLoader (limite connue)
 - [ ] Priorités de processus, `nice`, limites de ressources
 - [ ] IPC simple entre processus (files de messages)

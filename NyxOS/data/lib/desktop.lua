@@ -1,18 +1,18 @@
 -- /lib/desktop.lua : NyxOS graphical desktop
 --
--- A Basalt-based desktop environment:
---   * icons you can move (click + drag) and launch (double click),
---     snapped to a grid, positions saved in ~/.desktop-layout; several
---     pages when there are many icons
---   * apps (Files, Terminal, Packages, Tasks, Settings), installed
---     packages (apt) and the contents of ~/Desktop all show up as icons
---   * right-click menus, pop-up dialogs (rename, new folder, confirm...)
---   * a taskbar with a Start menu, page switcher and clock
+--   * icons you can move (drag, or click an icon then click where it goes),
+--     launch (double click) and act on (a single click shows a small menu);
+--     positions are saved in ~/.desktop-layout; several pages
+--   * floating windows: title bar with Move / Hide / Full screen / Close,
+--     overlapping, brought to front when clicked, listed in the taskbar
+--   * the apps are modules in /lib/apps/<id>.lua (see ctx below) -- the
+--     system ones (Files, Terminal, Packages, Tasks, Settings, Logs) and the
+--     default ones (Calculator, Code Editor, Calendar, Clock, Notes)
+--   * installed packages and the contents of ~/Desktop get icons too
+--   * every error is written to the system log (/var/log/nyxos.log)
 --
--- Apps fill the content area one at a time (there is no floating window
--- manager yet). Programs started from the desktop (package launch,
--- "Exit to shell") run on the real terminal; when they end the desktop
--- is rebuilt.
+-- Programs started from the desktop that need the real terminal (a package's
+-- launch command, reboot...) run there; the desktop comes back afterwards.
 
 local desktop = {}
 local palette = colors or colours
@@ -20,10 +20,6 @@ local palette = colors or colours
 local function loadBasalt()
     local nyxlib = dofile("/lib/nyxlib.lua")
     return nyxlib.loadBasalt()
-end
-
-local function captureCommand(cmd)
-    return dofile("/lib/capture.lua").run(cmd)
 end
 
 local function colorByName(name, fallback)
@@ -42,6 +38,12 @@ local function trim(s)
     return (tostring(s):gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+local function validName(value)
+    value = trim(value or "")
+    if value == "" or value:find("/", 1, true) then return nil end
+    return value
+end
+
 local function homeDir()
     local nyxlib = dofile("/lib/nyxlib.lua")
     local session = nyxlib.loadSession()
@@ -53,6 +55,8 @@ local function homeDir()
     end
     return "/home", nil
 end
+
+local SYSTEM_ORDER = { "files", "terminal", "packages", "tasks", "settings", "logs" }
 
 ------------------------------------------------------------------
 -- One run of the desktop. Returns ok, error, request where request is
@@ -67,6 +71,10 @@ local function runOnce()
 
     local theme = dofile("/lib/theme.lua")
     local iconlib = dofile("/lib/icon.lua")
+    local i18n = dofile("/lib/i18n.lua")
+    i18n.load()
+    local t = i18n.t
+    local logger = dofile("/lib/logger.lua")
     local accent = theme.accent()
     local nyxlib = dofile("/lib/nyxlib.lua")
     local config = nyxlib.loadTable("/etc/nyx-config.lua")
@@ -75,8 +83,19 @@ local function runOnce()
     local request = nil
 
     pcall(function() dofile("/lib/services.lua").registerPseudo("desktop", "ui", "Graphical desktop (Basalt)") end)
+    logger.info("desktop", "desktop started (user " .. tostring(username) .. ")")
 
-    local ok, runErr = pcall(function()
+    local errorFlash = nil
+    -- An error inside any handler no longer kills the desktop: it is
+    -- written to the system log (with traceback) and the desktop goes on.
+    if basalt.setErrorHandler then
+        basalt.setErrorHandler(function(err)
+            logger.crash("basalt", err)
+            errorFlash = os.epoch("utc")
+        end, true)
+    end
+
+    local ok, runErr = xpcall(function()
         local main = basalt.getMainFrame():setBackground(palette.black)
         local w, h = main:getWidth(), main:getHeight()
 
@@ -84,33 +103,30 @@ local function runOnce()
             :setPosition(1, 1):setSize(w, h - 1):setBackground(desktopBg)
 
         local taskbar = main:addFrame()
-            :setPosition(1, h):setSize(w, 1):setBackground(palette.gray)
+            :setPosition(1, h):setSize(w, 1):setBackground(palette.gray):setZ(800)
 
         local startButton = taskbar:addButton()
             :setText(" Start "):setPosition(1, 1):setSize(8, 1)
             :setBackground(accent):setForeground(palette.black)
 
-        local activeLabel = taskbar:addLabel()
-            :setText("Desktop"):setForeground(palette.white):setPosition(10, 1)
-
         local clockLabel = taskbar:addLabel()
-            :setText(""):setForeground(palette.white):setPosition(w - 8, 1)
+            :setText(""):setForeground(palette.white):setPosition(w - 8, 1):setSize(8, 1)
+        local errorLabel = taskbar:addLabel()
+            :setText(""):setForeground(palette.red):setPosition(w - 12, 1):setSize(3, 1)
 
-        local function updateClock()
-            clockLabel:setText(os.date("%H:%M:%S"))
-        end
-        updateClock()
         basalt.schedule(function()
             while true do
+                clockLabel:setText(os.date("%H:%M:%S"))
+                if errorFlash then
+                    errorLabel:setText((os.epoch("utc") - errorFlash < 8000) and " ! " or "")
+                end
                 sleep(1)
-                updateClock()
             end
         end)
 
         ------------------------------------------------------------
         -- Frames are never destroyed in the middle of the click that
-        -- replaces them: they are hidden at once and destroyed on the
-        -- next switch.
+        -- replaces them: they are hidden at once and destroyed later.
         ------------------------------------------------------------
         local graveyard = {}
         local function retire(frame)
@@ -126,7 +142,7 @@ local function runOnce()
         end
 
         ------------------------------------------------------------
-        -- Dialogs (pop-ups)
+        -- Dialogs (pop-ups) and context menus
         ------------------------------------------------------------
         local currentDialog = nil
         local function closeDialog()
@@ -141,17 +157,18 @@ local function runOnce()
         local function openDialog(opts)
             closeDialog()
             sweep()
-            local dw = math.min(w - 2, math.max(32, #(opts.text or "") + 4))
+            local dtitle, dtext = t(opts.title or ""), t(opts.text or "")
+            local dw = math.min(w - 2, math.max(32, #dtext + 4))
             local dh = opts.input and 9 or 7
             local dx, dy = math.floor((w - dw) / 2) + 1, math.floor((h - dh) / 2)
             local d = main:addFrame()
                 :setPosition(dx, math.max(1, dy)):setSize(dw, dh)
-                :setBackground(palette.gray)
+                :setBackground(palette.gray):setZ(900)
             currentDialog = d
-            d:addLabel():setText(center(opts.title or "", dw))
+            d:addLabel():setText(center(dtitle, dw))
                 :setPosition(1, 1):setSize(dw, 1)
                 :setBackground(accent):setForeground(palette.black)
-            d:addLabel():setText((opts.text or ""):sub(1, dw - 2))
+            d:addLabel():setText(dtext:sub(1, dw - 2))
                 :setPosition(2, 3):setForeground(palette.white)
             local inputBox
             if opts.input then
@@ -167,11 +184,11 @@ local function runOnce()
                 if opts.onOk then opts.onOk(value) end
             end
             local by = dh - 1
-            d:addButton():setText(opts.ok or "OK"):setPosition(2, by):setSize(10, 1)
+            d:addButton():setText(t(opts.ok or "OK")):setPosition(2, by):setSize(10, 1)
                 :setBackground(accent):setForeground(palette.black)
                 :onClick(accept)
             if opts.cancel ~= false then
-                d:addButton():setText(opts.cancel or "Cancel"):setPosition(14, by):setSize(10, 1)
+                d:addButton():setText(t(opts.cancel or "Cancel")):setPosition(14, by):setSize(10, 1)
                     :setBackground(palette.lightGray):setForeground(palette.black)
                     :onClick(closeDialog)
             end
@@ -187,7 +204,7 @@ local function runOnce()
             openDialog({ title = title, text = text, ok = "Yes", cancel = "No", onOk = onYes })
         end
 
-        -- Context menu: entries = { { "Label", function } ... } at x, y
+        -- entries = { { "Label", function } ... } at x, y
         local currentMenu = nil
         local function closeMenu()
             if currentMenu then retire(currentMenu); currentMenu = nil end
@@ -195,14 +212,14 @@ local function runOnce()
         local function openMenu(x, y, entries)
             closeMenu()
             local mw = 4
-            for _, e in ipairs(entries) do mw = math.max(mw, #e[1] + 3) end
+            for _, e in ipairs(entries) do mw = math.max(mw, #t(e[1]) + 3) end
             local mh = #entries
             x = math.max(1, math.min(x, w - mw + 1))
             y = math.max(1, math.min(y, h - mh))
-            local m = main:addFrame():setPosition(x, y):setSize(mw, mh):setBackground(palette.lightGray)
+            local m = main:addFrame():setPosition(x, y):setSize(mw, mh):setBackground(palette.lightGray):setZ(850)
             currentMenu = m
             for i, e in ipairs(entries) do
-                m:addButton():setText(" " .. e[1]):setPosition(1, i):setSize(mw, 1)
+                m:addButton():setText(" " .. t(e[1])):setPosition(1, i):setSize(mw, 1)
                     :setBackground(palette.lightGray):setForeground(palette.black)
                     :onClick(function()
                         closeMenu()
@@ -212,48 +229,443 @@ local function runOnce()
         end
 
         ------------------------------------------------------------
-        -- Screens: the desktop or one app at a time
+        -- Apps (modules in /lib/apps)
         ------------------------------------------------------------
-        local apps = {}
-        local currentPanel = nil
-        local showDesktop -- forward declaration
+        local appModules = {}   -- every module found
+        local apps = {}         -- the enabled ones: { name, module }
+        local showDesktop       -- forward declaration (icons)
+        local launchApp, openWindow
 
-        local function newPanel()
-            closeMenu()
-            sweep()
-            if currentPanel then
-                retire(currentPanel)
-            end
-            local panel = content:addFrame()
-                :setPosition(1, 1):setSize(w, h - 1):setBackground(desktopBg)
-            currentPanel = panel
-            return panel
-        end
-
-        -- Asks the main loop to run `command` on the real terminal, then
-        -- bring the desktop back.
         local function runOnTerminal(command)
             request = { command = command }
             basalt.stop()
         end
-
-        local function launchApp(name, arg)
-            for _, a in ipairs(apps) do
-                if a.name == name then a.launch(arg) return end
-            end
+        local function restart()
+            request = { restart = true }
+            basalt.stop()
         end
         local function openTerminal(command) launchApp("Terminal", command) end
 
-        local function registerApp(name, color, builder)
-            table.insert(apps, {
-                name = name,
-                color = color,
-                launch = function(arg)
-                    local area = newPanel()
-                    activeLabel:setText(name)
-                    builder(area, arg)
+        ------------------------------------------------------------
+        -- Windows
+        ------------------------------------------------------------
+        local windows = {}
+        local zTop = 10
+        local activeWin = nil
+        local cascade = 0
+        local drag = nil
+        local carry = nil
+        local lastTitleClick = { win = nil, at = 0 }
+        local taskButtons = {}
+        local MAX_TASK = 6
+
+        local function refreshTaskbar()
+            local first = 10
+            local avail = w - 22 - first
+            local n = math.min(#windows, MAX_TASK)
+            local bw = n > 0 and math.max(5, math.min(14, math.floor(avail / n))) or 0
+            for i = 1, MAX_TASK do
+                local b = taskButtons[i]
+                local win = windows[i]
+                if win and i <= n then
+                    local label = (" " .. win.title):sub(1, bw - 1)
+                    local active = (win == activeWin and not win.minimized)
+                    b:setText(label .. string.rep(" ", math.max(0, bw - 1 - #label)))
+                        :setPosition(first + (i - 1) * bw, 1):setSize(bw - 1, 1)
+                        :setBackground(active and accent or (win.minimized and palette.black or palette.lightGray))
+                        :setForeground(active and palette.black or palette.white)
+                    b:setVisible(true)
+                else
+                    b:setVisible(false)
+                end
+            end
+        end
+
+        local function paintBar(win)
+            local active = (win == activeWin)
+            pcall(function()
+                win.bar:setBackground(active and accent or palette.lightGray)
+                local bt = (" " .. win.title):sub(1, win.fw - 13)
+                win.bar:setText(bt .. string.rep(" ", math.max(0, win.fw - 12 - #bt)))
+            end)
+        end
+
+        local function focusWindow(win)
+            if not win or win.closed then return end
+            if win.minimized then
+                win.minimized = false
+                win.frame:setVisible(true)
+            end
+            zTop = zTop + 1
+            if zTop > 700 then
+                -- renumber to stay below the menus and dialogs
+                zTop = 10
+                for _, other in ipairs(windows) do
+                    zTop = zTop + 1
+                    other.frame:setZ(zTop)
+                end
+            end
+            win.frame:setZ(zTop)
+            local previous = activeWin
+            activeWin = win
+            if previous and previous ~= win then paintBar(previous) end
+            paintBar(win)
+            refreshTaskbar()
+        end
+
+        local function topWindowAt(x, y)
+            local best
+            for _, win in ipairs(windows) do
+                if not win.minimized and not win.closed
+                    and x >= win.x and x < win.x + win.fw and y >= win.y and y < win.y + win.fh then
+                    if not best or win.frame.get("z") > best.frame.get("z") then best = win end
+                end
+            end
+            return best
+        end
+
+        local function closeWindow(win)
+            if not win or win.closed then return end
+            win.closed = true
+            if win.onClose then pcall(win.onClose) end
+            retire(win.frame)
+            for i, other in ipairs(windows) do
+                if other == win then table.remove(windows, i) break end
+            end
+            if activeWin == win then
+                activeWin = nil
+                local best
+                for _, other in ipairs(windows) do
+                    if not other.minimized and (not best or other.frame.get("z") > best.frame.get("z")) then best = other end
+                end
+                if best then focusWindow(best) end
+            end
+            logger.info("desktop", "closed window " .. tostring(win.app.name))
+            refreshTaskbar()
+        end
+
+        local function minimizeWindow(win)
+            if not win or win.closed then return end
+            win.minimized = true
+            win.frame:setVisible(false)
+            if activeWin == win then
+                activeWin = nil
+                local best
+                for _, other in ipairs(windows) do
+                    if not other.minimized and (not best or other.frame.get("z") > best.frame.get("z")) then best = other end
+                end
+                if best then focusWindow(best) end
+            end
+            refreshTaskbar()
+        end
+
+        local function appSize(app, maximized)
+            local maxBw, maxBh = w, h - 2
+            if maximized then return maxBw, maxBh end
+            local pref = app.size
+            local bw = pref and pref[1] or math.min(w - 2, 70)
+            local bh = pref and pref[2] or math.min(h - 4, 26)
+            return math.max(20, math.min(bw, maxBw)), math.max(6, math.min(bh, maxBh))
+        end
+
+        function openWindow(app, arg, opts)
+            opts = opts or {}
+            if not app.multi and not opts.force then
+                for _, win in ipairs(windows) do
+                    if win.app == app then
+                        focusWindow(win)
+                        return win
+                    end
+                end
+            end
+            closeMenu()
+            sweep()
+
+            local bw, bh = appSize(app, opts.maximized)
+            local fw, fh = bw, bh + 1
+            local x, y = 1, 1
+            if opts.maximized then
+                x, y = 1, 1
+            elseif opts.x then
+                x, y = opts.x, opts.y
+            else
+                cascade = (cascade % 6) + 1
+                x = math.max(1, math.min(w - fw + 1, 1 + (cascade - 1) * 2 + math.floor((w - fw) / 2) - 4))
+                y = math.max(1, math.min((h - 1) - fh + 1, 1 + (cascade - 1)))
+            end
+
+            local frame = content:addFrame():setPosition(x, y):setSize(fw, fh)
+                :setBackground(palette.gray):setZ(zTop + 1)
+            local bar = frame:addButton():setText(""):setPosition(1, 1):setSize(fw - 12, 1)
+                :setBackground(palette.lightGray):setForeground(palette.black)
+            local body = frame:addFrame():setPosition(1, 2):setSize(bw, bh):setBackground(desktopBg)
+
+            local win = {
+                app = app, arg = arg, frame = frame, bar = bar, body = body,
+                x = x, y = y, fw = fw, fh = fh, bw = bw, bh = bh,
+                title = t(app.name), maximized = opts.maximized and true or false,
+                minimized = false, closed = false,
+            }
+            table.insert(windows, win)
+
+            local function titleButton(offset, text, bg, fg, fn)
+                frame:addButton():setText(text):setPosition(fw - offset, 1):setSize(3, 1)
+                    :setBackground(bg):setForeground(fg):onClick(fn)
+            end
+            titleButton(11, " + ", palette.cyan, palette.black, function()
+                focusWindow(win)
+                carry = win
+            end)
+            titleButton(8, " _ ", palette.yellow, palette.black, function() minimizeWindow(win) end)
+            titleButton(5, win.maximized and " o " or " O ", palette.lime, palette.black, function()
+                local saved = win.saver and win.saver() or nil
+                local wasMax = win.maximized
+                local ox, oy = win.x, win.y
+                closeWindow(win)
+                local newWin = openWindow(app, arg, {
+                    maximized = not wasMax, force = true, restore = saved,
+                    x = wasMax and (win.restoreX or ox) or nil, y = wasMax and (win.restoreY or oy) or nil,
+                })
+                if newWin and not wasMax then newWin.restoreX, newWin.restoreY = ox, oy end
+            end)
+            titleButton(2, " X ", palette.red, palette.white, function() closeWindow(win) end)
+
+            bar:onClick(function(self, btn, rx)
+                focusWindow(win)
+                local now = os.epoch("utc")
+                if lastTitleClick.win == win and now - lastTitleClick.at < 500 and not win.noMax then
+                    lastTitleClick = { win = nil, at = 0 }
+                    drag = nil
+                    -- same as the Full screen button
+                    local saved = win.saver and win.saver() or nil
+                    local wasMax = win.maximized
+                    local ox, oy = win.x, win.y
+                    closeWindow(win)
+                    local newWin = openWindow(app, arg, {
+                        maximized = not wasMax, force = true, restore = saved,
+                        x = wasMax and (win.restoreX or ox) or nil, y = wasMax and (win.restoreY or oy) or nil,
+                    })
+                    if newWin and not wasMax then newWin.restoreX, newWin.restoreY = ox, oy end
+                    return
+                end
+                lastTitleClick = { win = win, at = now }
+                drag = { kind = "win", win = win, grab = rx, moved = false }
+            end)
+
+            -- per-window API handed to the app
+            local ctx
+            ctx = setmetatable({
+                win = win,
+                setTitle = function(text)
+                    win.title = tostring(text)
+                    paintBar(win)
+                    refreshTaskbar()
                 end,
-            })
+                closeWindow = function() closeWindow(win) end,
+                alive = function() return not win.closed end,
+                visible = function() return not win.closed and not win.minimized end,
+                restoreState = opts.restore,
+                setSaver = function(fn) win.saver = fn end,
+            }, { __index = desktop._base })
+
+            focusWindow(win)
+            logger.info("desktop", "opened " .. tostring(app.name))
+            local okBuild, errBuild = logger.try("app:" .. tostring(app.id), function()
+                app.build(body, ctx, arg)
+            end)
+            if not okBuild then
+                closeWindow(win)
+                message("Error", t("%s crashed. See the Logs app.", t(app.name)))
+                return nil
+            end
+            return win
+        end
+
+        function launchApp(name, arg)
+            for _, a in ipairs(apps) do
+                if a.name == name or a.id == name then
+                    return openWindow(a, arg)
+                end
+            end
+            for _, a in ipairs(appModules) do
+                if a.name == name then
+                    message("Info", t("%s is disabled (Settings > Apps).", t(name)))
+                    return nil
+                end
+            end
+        end
+
+        for i = 1, MAX_TASK do
+            local b = taskbar:addButton():setText(""):setPosition(10, 1):setSize(6, 1)
+            b:setVisible(false)
+            b:onClick(function()
+                local win = windows[i]
+                if not win then return end
+                if win.minimized then focusWindow(win)
+                elseif win == activeWin then minimizeWindow(win)
+                else focusWindow(win) end
+            end)
+            taskButtons[i] = b
+        end
+
+        -- Brings the clicked window to the front, and drops a window that
+        -- is being carried ("+" button) where the next click lands.
+        basalt.onEvent("mouse_click", function(btn, x, y)
+            if carry then
+                local win = carry
+                carry = nil
+                if not win.closed and not win.maximized then
+                    local nx = math.max(1, math.min(w - 3, x - 1))
+                    local ny = math.max(1, math.min(h - 2, y))
+                    win.x, win.y = nx, ny
+                    win.frame:setPosition(nx, ny)
+                end
+                return
+            end
+            if y >= 1 and y <= h - 1 then
+                local win = topWindowAt(x, y)
+                if win and win ~= activeWin then focusWindow(win) end
+            end
+        end)
+
+        ------------------------------------------------------------
+        -- Context for the apps (shared by all windows)
+        ------------------------------------------------------------
+        local function pickFile(opts, callback)
+            closeDialog()
+            sweep()
+            local dw, dh = math.min(w - 4, 44), math.min(h - 3, 16)
+            local d = main:addFrame():setPosition(math.floor((w - dw) / 2) + 1, math.floor((h - dh) / 2) + 1)
+                :setSize(dw, dh):setBackground(palette.gray):setZ(900)
+            currentDialog = d
+            local dir = "/" .. fs.combine("", opts.dir or "/")
+            if not fs.isDir(dir) then dir = "/" end
+            d:addLabel():setText(center(t(opts.title or "Open"), dw)):setPosition(1, 1):setSize(dw, 1)
+                :setBackground(accent):setForeground(palette.black)
+            local pathLabel = d:addLabel():setText(""):setPosition(2, 2):setSize(dw - 2, 1)
+                :setForeground(palette.lightGray)
+            local save = opts.mode == "save"
+            local list = d:addList():setPosition(2, 3):setSize(dw - 2, dh - (save and 7 or 5))
+                :setBackground(palette.black):setForeground(palette.white)
+                :setSelectedBackground(accent):setSelectedForeground(palette.black)
+            local nameInput
+            if save then
+                nameInput = d:addInput():setPosition(2, dh - 3):setSize(dw - 2, 1)
+                    :setBackground(palette.black):setForeground(palette.white):setText(opts.name or "")
+            end
+            local entries = {}
+            local lastPick = { index = nil, at = 0 }
+            local function choose(path)
+                closeDialog()
+                callback(path)
+            end
+            local function refresh()
+                list:clear()
+                entries = {}
+                pathLabel:setText(dir:sub(1, dw - 2))
+                if dir ~= "/" then entries[#entries + 1] = { name = "..", dir = true } end
+                local names = fs.list(dir)
+                table.sort(names, function(a, b)
+                    local da, db = fs.isDir(fs.combine(dir, a)), fs.isDir(fs.combine(dir, b))
+                    if da ~= db then return da end
+                    return a:lower() < b:lower()
+                end)
+                for _, name in ipairs(names) do
+                    entries[#entries + 1] = { name = name, dir = fs.isDir(fs.combine(dir, name)) }
+                end
+                for _, e in ipairs(entries) do
+                    list:addItem({ text = (e.dir and " [DIR] " or "       ") .. e.name,
+                        fg = e.dir and palette.yellow or palette.white, selectedFg = palette.black })
+                end
+            end
+            local function openEntry(e)
+                if e.name == ".." then
+                    local parent = fs.getDir(dir)
+                    dir = (parent == "" or parent == "..") and "/" or ("/" .. parent)
+                    refresh()
+                elseif e.dir then
+                    dir = "/" .. fs.combine(dir, e.name)
+                    refresh()
+                elseif save then
+                    nameInput:setText(e.name)
+                else
+                    choose("/" .. fs.combine(dir, e.name))
+                end
+            end
+            list:onSelect(function(self, index)
+                local e = entries[index]
+                if not e then return end
+                local now = os.epoch("utc")
+                if lastPick.index == index and now - lastPick.at < 700 then
+                    lastPick = { index = nil, at = 0 }
+                    openEntry(e)
+                    return
+                end
+                lastPick = { index = index, at = now, entry = e }
+                if save and not e.dir then nameInput:setText(e.name) end
+            end)
+            local by = dh - 1
+            d:addButton():setText(t(save and "Save" or "Open")):setPosition(2, by):setSize(10, 1)
+                :setBackground(accent):setForeground(palette.black)
+                :onClick(function()
+                    if save then
+                        local name = trim(nameInput:getText() or "")
+                        if name == "" or name:find("/", 1, true) then return end
+                        choose("/" .. fs.combine(dir, name))
+                    elseif lastPick.entry then
+                        openEntry(lastPick.entry)
+                    end
+                end)
+            d:addButton():setText(t("Cancel")):setPosition(14, by):setSize(10, 1)
+                :setBackground(palette.lightGray):setForeground(palette.black):onClick(closeDialog)
+            refresh()
+        end
+
+        desktop._base = {
+            basalt = basalt, palette = palette, accent = accent, bg = desktopBg,
+            t = t, home = home, username = username, config = config,
+            center = center, trim = trim, validName = validName,
+            dialog = openDialog, message = message, confirm = confirm,
+            pickFile = pickFile, openTerminal = openTerminal, runOnTerminal = runOnTerminal,
+            launch = launchApp, restart = restart,
+            appModules = appModules,
+            try = function(tag, fn, ...) return logger.try(tag, fn, ...) end,
+            -- gives the focus to `element` once the click that opened the
+            -- app has been fully dispatched (Basalt focuses the clicked
+            -- element last, which would steal it back)
+            focus = function(element)
+                basalt.schedule(function()
+                    sleep(0.05)
+                    pcall(function() element:setFocused(true) end)
+                end)
+            end,
+        }
+
+        -- load the modules
+        if fs.exists("/lib/apps") and fs.isDir("/lib/apps") then
+            local files = fs.list("/lib/apps")
+            table.sort(files)
+            for _, file in ipairs(files) do
+                if file:match("%.lua$") then
+                    local okMod, mod = logger.try("desktop", dofile, "/lib/apps/" .. file)
+                    if okMod and type(mod) == "table" and mod.id and mod.build then
+                        table.insert(appModules, mod)
+                    end
+                end
+            end
+        end
+        table.sort(appModules, function(a, b)
+            local ia, ib = 99, 99
+            for i, id in ipairs(SYSTEM_ORDER) do
+                if id == a.id then ia = i end
+                if id == b.id then ib = i end
+            end
+            if ia ~= ib then return ia < ib end
+            return a.id < b.id
+        end)
+        for _, mod in ipairs(appModules) do
+            local on = mod.system or type(config.apps) ~= "table" or config.apps[mod.id] ~= false
+            if on then table.insert(apps, mod) end
         end
 
         ------------------------------------------------------------
@@ -268,9 +680,9 @@ local function runOnce()
         local pages = 1
         local selectedId = nil
         local lastClick = { id = nil, at = 0 }
-        local drag = nil
         local pageLabel
         local currentItems = {}
+        local desktopPanel
 
         local function saveLayout()
             if fs.exists(home) then pcall(nyxlib.saveTable, layoutPath, layout) end
@@ -284,24 +696,29 @@ local function runOnce()
             local items = {}
             for _, a in ipairs(apps) do
                 table.insert(items, {
-                    id = "app:" .. a.name, name = a.name, icon = iconlib.builtin[a.name],
-                    open = function() a.launch() end, kind = "app",
+                    id = "app:" .. a.name, name = a.name, label = t(a.name), icon = a.icon,
+                    open = function() launchApp(a.name) end, kind = "app",
                 })
             end
             local manifest = nyxlib.loadManifest()
             local names = {}
             for name, entry in pairs(manifest) do
-                if entry.launch and not entry.removed then table.insert(names, name) end
+                if not entry.removed and (nyxlib.launcherFor(name, entry) or entry.service) then
+                    table.insert(names, name)
+                end
             end
             table.sort(names)
             for _, name in ipairs(names) do
                 local entry = manifest[name]
+                local cmd = nyxlib.launcherFor(name, entry)
                 table.insert(items, {
                     id = "pkg:" .. name, name = name, kind = "pkg", package = name,
                     icon = (iconlib.isPixel(entry.icon) and entry.icon) or iconlib.load(name)
                         or (type(entry.icon) == "table" and (entry.icon.color or entry.icon.art) and entry.icon)
                         or iconlib.builtin.package,
-                    open = function() runOnTerminal(entry.launch) end,
+                    open = function()
+                        if cmd then runOnTerminal(cmd) else openTerminal("service start " .. tostring(entry.service)) end
+                    end,
                 })
             end
             local deskDir = home .. "/Desktop"
@@ -323,7 +740,7 @@ local function runOnce()
                                 elseif name:match("%.nyx$") then
                                     openTerminal("nyx " .. full)
                                 else
-                                    launchApp("Files", "/" .. fs.getDir(full))
+                                    launchApp("Code Editor", full)
                                 end
                             end,
                         })
@@ -378,25 +795,19 @@ local function runOnce()
             end
         end
 
-        local function validName(value)
-            value = trim(value)
-            if value == "" or value:find("/", 1, true) then return nil end
-            return value
-        end
-
         local function deleteItem(it)
             if it.kind == "fs" then
-                confirm("Delete", "Delete " .. it.name .. " ?", function()
+                confirm("Delete", t("Delete %s ?", it.name), function()
                     local okDel, errDel = pcall(fs.delete, it.path)
                     if not okDel then message("Error", tostring(errDel)) end
                     showDesktop()
                 end)
             elseif it.kind == "pkg" then
-                confirm("Uninstall", "Uninstall " .. it.package .. " ?", function()
+                confirm("Uninstall", t("Uninstall %s ?", it.package), function()
                     openTerminal("apt remove " .. it.package)
                 end)
             else
-                message("Info", it.name .. " is a system app.")
+                message("Info", t("%s is a system app.", it.name))
             end
         end
 
@@ -405,12 +816,12 @@ local function runOnce()
                 message("Info", "Only desktop files can be renamed.")
                 return
             end
-            openDialog({ title = "Rename", text = "New name for " .. it.name, input = it.name,
+            openDialog({ title = "Rename", text = t("New name for %s", it.name), input = it.name,
                 onOk = function(value)
                     value = validName(value)
                     if not value then message("Error", "Invalid name.") return end
                     local dest = fs.combine(fs.getDir(it.path), value)
-                    if fs.exists(dest) then message("Error", value .. " already exists.") return end
+                    if fs.exists(dest) then message("Error", t("%s already exists.", value)) return end
                     local okMv, errMv = pcall(fs.move, it.path, dest)
                     if not okMv then message("Error", tostring(errMv)) return end
                     showDesktop()
@@ -426,7 +837,7 @@ local function runOnce()
                     if not value then message("Error", "Invalid name.") return end
                     if not fs.exists(deskDir) then pcall(fs.makeDir, deskDir) end
                     local dest = fs.combine(deskDir, value)
-                    if fs.exists(dest) then message("Error", value .. " already exists.") return end
+                    if fs.exists(dest) then message("Error", t("%s already exists.", value)) return end
                     if isDir then
                         pcall(fs.makeDir, dest)
                     else
@@ -454,7 +865,7 @@ local function runOnce()
             it.frame = f
             local rows = iconlib.build(it.icon, config.desktopBg or "black")
             f:addImage():setPosition(2, 1):setSize(8, 3):setBimg({ rows })
-            it.nameLabel = f:addLabel():setText(center(it.name, 10)):setPosition(1, 4)
+            it.nameLabel = f:addLabel():setText(center(it.label or it.name, 10)):setPosition(1, 4)
                 :setSize(10, 1):setBackground(desktopBg):setForeground(palette.white)
             return f
         end
@@ -471,10 +882,32 @@ local function runOnce()
             end
         end
 
+        -- Puts item `it` in the grid cell (col, row) of the current page
+        -- (swapping with whatever is there), saves and redraws.
+        local function placeItem(it, col, row)
+            col = math.max(1, math.min(COLS, col))
+            row = math.max(1, math.min(ROWS, row))
+            local target
+            for _, other in ipairs(currentItems) do
+                if other ~= it and other.pos.page == page and other.pos.col == col and other.pos.row == row then
+                    target = other
+                end
+            end
+            local old = { page = it.pos.page, col = it.pos.col, row = it.pos.row }
+            if target then layout[target.id] = old end
+            layout[it.id] = { page = page, col = col, row = row }
+            saveLayout()
+            showDesktop()
+        end
+
         function showDesktop()
-            local panel = newPanel()
-            activeLabel:setText("Desktop")
-            drag = nil
+            closeMenu()
+            sweep()
+            if desktopPanel then retire(desktopPanel) end
+            local panel = content:addFrame()
+                :setPosition(1, 1):setSize(w, h - 1):setBackground(desktopBg):setZ(1)
+            desktopPanel = panel
+            drag = (drag and drag.kind == "win") and drag or nil
             currentItems = collectItems()
             assignCells(currentItems)
             if page > pages then page = pages end
@@ -485,9 +918,9 @@ local function runOnce()
                     local f = buildIcon(panel, it, cellX(it.pos.col), cellY(it.pos.row))
                     f:onClick(function(self, btn, rx, ry)
                         closeMenu()
-                        selectedId = it.id
-                        highlight()
                         if btn == 2 then
+                            selectedId = it.id
+                            highlight()
                             iconMenu(it, f:getX() + rx - 1, f:getY() + ry - 1)
                             return
                         end
@@ -499,714 +932,90 @@ local function runOnce()
                             return
                         end
                         lastClick = { id = it.id, at = now }
-                        drag = { item = it, offx = rx, offy = ry, moved = false }
+                        selectedId = it.id
+                        highlight()
+                        drag = { kind = "icon", item = it, offx = rx, offy = ry, moved = false }
+                        -- a single click also shows the icon's menu
+                        local mx = f:getX() + 10
+                        if mx + 12 > w then mx = math.max(1, f:getX() - 12) end
+                        iconMenu(it, mx, f:getY())
                     end)
                 end
             end
 
-            -- Drag & drop is tracked on the panel, which sees every drag
-            -- event even after the pointer leaves the icon.
-            panel:onDrag(function(self, btn, x, y)
-                if not drag then return end
-                local f = drag.item.frame
-                local nx = math.max(1, math.min(w - 9, x - drag.offx + 1))
-                local ny = math.max(1, math.min(h - 4, y - drag.offy + 1))
-                if nx ~= f:getX() or ny ~= f:getY() then
-                    drag.moved = true
-                    f:setPosition(nx, ny)
-                end
-            end)
-            panel:onClickUp(function(self, btn, x, y)
-                if not drag then return end
-                local d = drag
-                drag = nil
-                if not d.moved then return end
-                local f = d.item.frame
-                -- nearest grid cell to the icon's centre
-                local col = math.max(1, math.min(COLS, math.floor((f:getX() + 4 - 2) / GW + 1.5)))
-                local row = math.max(1, math.min(ROWS, math.floor((f:getY() + 1 - 2) / GH + 1.5)))
-                local target
-                for _, other in ipairs(currentItems) do
-                    if other ~= d.item and other.pos.page == page and other.pos.col == col and other.pos.row == row then
-                        target = other
-                    end
-                end
-                local old = { page = d.item.pos.page, col = d.item.pos.col, row = d.item.pos.row }
-                if target then layout[target.id] = old end
-                layout[d.item.id] = { page = page, col = col, row = row }
-                saveLayout()
-                showDesktop()
-            end)
             panel:onClick(function(self, btn, rx, ry)
                 closeMenu()
-                if selectedId then selectedId = nil; highlight() end
                 if btn == 2 then
+                    selectedId = nil
+                    highlight()
                     openMenu(rx, ry, {
                         { "New folder", function() newDesktopEntry(true) end },
                         { "New file", function() newDesktopEntry(false) end },
                         { "Refresh", function() showDesktop() end },
                     })
+                    return
+                end
+                -- click an icon, then click an empty spot: the icon goes there
+                if selectedId then
+                    for _, it in ipairs(currentItems) do
+                        if it.id == selectedId and it.pos.page == page then
+                            local col = math.floor((rx - 2) / GW) + 1
+                            local row = math.floor((ry - 2) / GH) + 1
+                            selectedId = nil
+                            placeItem(it, col, row)
+                            return
+                        end
+                    end
+                    selectedId = nil
+                    highlight()
                 end
             end)
             highlight()
         end
 
-        ------------------------------------------------------------
-        -- App: Files
-        ------------------------------------------------------------
-        registerApp("Files", palette.yellow, function(area, startDir)
-            local currentDir = "/"
-            if type(startDir) == "string" and fs.isDir(startDir) then
-                currentDir = "/" .. fs.combine("", startDir)
-            end
-            local entries, selectedIndex = {}, nil
-            local lastSel = { index = nil, at = 0 }
-
-            local pathLabel = area:addLabel():setText(""):setPosition(1, 1):setSize(w, 1)
-                :setBackground(accent):setForeground(palette.black)
-            local list = area:addList():setPosition(1, 3):setSize(w, h - 6)
-                :setBackground(palette.gray):setForeground(palette.white)
-                :setSelectedBackground(accent):setSelectedForeground(palette.black)
-            local status = area:addLabel():setText(""):setForeground(palette.lightGray)
-                :setPosition(2, h - 2)
-
-            local function selectedEntry()
-                local e = selectedIndex and entries[selectedIndex]
-                if not e or e.name == ".." then return nil end
-                return e
-            end
-
-            local function typeColor(e)
-                if e.dir then return palette.yellow end
-                if e.name:match("%.lua$") then return palette.lime end
-                if e.name:match("%.nyx$") then return palette.cyan end
-                if e.name:match("%.json$") or e.name:match("%.txt$") or e.name:match("%.md$") then return palette.lightBlue end
-                return palette.white
-            end
-
-            local function refresh()
-                list:clear()
-                entries = {}
-                selectedIndex = nil
-                if currentDir ~= "/" then
-                    table.insert(entries, { name = "..", dir = true })
+        -- Drag & drop (icons and windows) is tracked on the content frame,
+        -- which sees every drag event even after the pointer leaves the
+        -- element that started it.
+        content:onDrag(function(self, btn, x, y)
+            if not drag then return end
+            if drag.kind == "win" then
+                local win = drag.win
+                if win.closed or win.maximized then return end
+                local nx = math.max(1 - (win.fw - 6), math.min(w - 3, x - drag.grab + 1))
+                local ny = math.max(1, math.min(h - 2, y))
+                if nx ~= win.x or ny ~= win.y then
+                    drag.moved = true
+                    win.x, win.y = nx, ny
+                    win.frame:setPosition(nx, ny)
                 end
-                local names = fs.list(currentDir)
-                table.sort(names, function(a, b)
-                    local da, db = fs.isDir(fs.combine(currentDir, a)), fs.isDir(fs.combine(currentDir, b))
-                    if da ~= db then return da end
-                    return a:lower() < b:lower()
-                end)
-                for _, name in ipairs(names) do
-                    local full = "/" .. fs.combine(currentDir, name)
-                    table.insert(entries, { name = name, dir = fs.isDir(full), full = full })
+            elseif drag.kind == "icon" then
+                local f = drag.item.frame
+                local nx = math.max(1, math.min(w - 9, x - drag.offx + 1))
+                local ny = math.max(1, math.min(h - 4, y - drag.offy + 1))
+                if nx ~= f:getX() or ny ~= f:getY() then
+                    if not drag.moved then closeMenu() end
+                    drag.moved = true
+                    f:setPosition(nx, ny)
                 end
-                for _, e in ipairs(entries) do
-                    local label = e.name == ".." and "  ..  (up)" or ((e.dir and " [DIR]  " or "        ") .. e.name)
-                    if e.full and not e.dir then
-                        label = label .. "  " .. nyxlib.formatSize(fs.getSize(e.full))
-                    end
-                    list:addItem({ text = label, fg = e.name == ".." and palette.lightGray or typeColor(e),
-                        selectedFg = palette.black })
-                end
-                pathLabel:setText(" " .. currentDir)
-                status:setText(#names .. " item(s)")
-            end
-
-            local function goUp()
-                currentDir = "/" .. fs.getDir(currentDir)
-                currentDir = "/" .. fs.combine("", currentDir)
-                refresh()
-            end
-
-            local function openEntry(e)
-                if e.name == ".." then goUp()
-                elseif e.dir then currentDir = e.full; refresh()
-                elseif e.name:match("%.lua$") then openTerminal(e.full)
-                elseif e.name:match("%.nyx$") then openTerminal("nyx " .. e.full)
-                else status:setText(e.full .. " (" .. nyxlib.formatSize(fs.getSize(e.full)) .. ")") end
-            end
-
-            -- one click selects, a second click on the same row opens it
-            list:onSelect(function(self, index)
-                selectedIndex = index
-                local e = entries[index]
-                if not e then return end
-                local now = os.epoch("utc")
-                if lastSel.index == index and now - lastSel.at < 700 then
-                    lastSel = { index = nil, at = 0 }
-                    openEntry(e)
-                    return
-                end
-                lastSel = { index = index, at = now }
-                status:setText(e.full or e.name)
-            end)
-
-            local function button(x, bw, text, bg, fg, fn)
-                area:addButton():setText(text):setPosition(x, 2):setSize(bw, 1)
-                    :setBackground(bg):setForeground(fg):onClick(fn)
-            end
-            local tb = palette.lightGray
-            button(1, 6, " Up", tb, palette.black, goUp)
-            button(8, 8, " Open", tb, palette.black, function()
-                local e = selectedEntry(); if e then openEntry(e) end
-            end)
-            button(17, 7, " +Dir", palette.green, palette.black, function()
-                openDialog({ title = "New folder", text = "Name:", input = "New Folder", onOk = function(v)
-                    v = validName(v)
-                    if not v then message("Error", "Invalid name.") return end
-                    local dest = fs.combine(currentDir, v)
-                    if fs.exists(dest) then message("Error", v .. " already exists.") return end
-                    local okMk, errMk = pcall(fs.makeDir, dest)
-                    if not okMk then message("Error", tostring(errMk)) end
-                    refresh()
-                end })
-            end)
-            button(25, 8, " +File", palette.green, palette.black, function()
-                openDialog({ title = "New file", text = "Name:", input = "new.txt", onOk = function(v)
-                    v = validName(v)
-                    if not v then message("Error", "Invalid name.") return end
-                    local dest = fs.combine(currentDir, v)
-                    if fs.exists(dest) then message("Error", v .. " already exists.") return end
-                    local f = fs.open(dest, "w")
-                    if f then f.close() else message("Error", "Cannot create " .. v) end
-                    refresh()
-                end })
-            end)
-            button(34, 8, " Rename", palette.orange, palette.black, function()
-                local e = selectedEntry()
-                if not e then status:setText("Select a file or folder first.") return end
-                openDialog({ title = "Rename", text = "New name for " .. e.name, input = e.name, onOk = function(v)
-                    v = validName(v)
-                    if not v then message("Error", "Invalid name.") return end
-                    local dest = fs.combine(fs.getDir(e.full), v)
-                    if fs.exists(dest) then message("Error", v .. " already exists.") return end
-                    local okMv, errMv = pcall(fs.move, e.full, dest)
-                    if not okMv then message("Error", tostring(errMv)) end
-                    refresh()
-                end })
-            end)
-            button(43, 8, " Delete", palette.red, palette.white, function()
-                local e = selectedEntry()
-                if not e then status:setText("Select a file or folder first.") return end
-                confirm("Delete", "Delete " .. e.name .. " ?", function()
-                    local okDel, errDel = pcall(fs.delete, e.full)
-                    if not okDel then message("Error", tostring(errDel)) end
-                    refresh()
-                end)
-            end)
-
-            area:addButton():setText(" Home"):setPosition(w - 20, h - 2):setSize(7, 1)
-                :setBackground(palette.lightBlue):setForeground(palette.black)
-                :onClick(function() currentDir = fs.exists(home) and home or "/"; refresh() end)
-            area:addButton():setText(" Desktop"):setPosition(w - 12, h - 2):setSize(10, 1)
-                :setBackground(palette.lightBlue):setForeground(palette.black)
-                :onClick(function()
-                    local d = home .. "/Desktop"
-                    if not fs.exists(d) then pcall(fs.makeDir, d) end
-                    currentDir = d
-                    refresh()
-                end)
-            refresh()
-        end)
-
-        ------------------------------------------------------------
-        -- App: Terminal (the graphical shell, smaller)
-        ------------------------------------------------------------
-        registerApp("Terminal", palette.cyan, function(area, initialCommand)
-            local shellui = dofile("/lib/shellui.lua")
-            local controller = shellui.mount(basalt, area, {
-                header = false,
-                onExit = function() showDesktop() end,
-            })
-            if type(initialCommand) == "string" and initialCommand ~= "" and controller then
-                controller.execute(initialCommand)
             end
         end)
-
-        ------------------------------------------------------------
-        -- App: Packages
-        ------------------------------------------------------------
-        registerApp("Packages", palette.green, function(area)
-            local pgs, tabButtons = {}, {}
-            local function newPage()
-                local f = area:addFrame():setPosition(1, 3):setSize(w, h - 3):setBackground(desktopBg)
-                f:setVisible(false)
-                table.insert(pgs, f)
-                return f
-            end
-            local function showPage(i)
-                for j, f in ipairs(pgs) do f:setVisible(j == i) end
-                for j, b in ipairs(tabButtons) do
-                    b:setBackground(j == i and accent or palette.gray)
-                    b:setForeground(j == i and palette.black or palette.white)
-                end
-            end
-            area:addLabel():setText(" Packages"):setPosition(1, 1):setSize(w, 1)
-                :setBackground(accent):setForeground(palette.black)
-            for i, name in ipairs({ "Installed", "Browse registry" }) do
-                local b = area:addButton():setText(" " .. name .. " ")
-                    :setPosition(i == 1 and 2 or 14, 2):setSize(#name + 2, 1)
-                b:onClick(function() showPage(i) end)
-                tabButtons[i] = b
-            end
-
-            -------- installed
-            local ip = newPage()
-            local names, selectedName = {}, nil
-            local list = ip:addList():setPosition(2, 1):setSize(w - 2, h - 10)
-                :setBackground(palette.gray):setForeground(palette.white)
-                :setSelectedBackground(accent):setSelectedForeground(palette.black)
-            local info = ip:addTextBox():setPosition(2, h - 8):setSize(w - 2, 3)
-                :setEditable(false):setBackground(palette.black):setForeground(palette.lightGray)
-
-            local function refresh()
-                list:clear()
-                names = {}
-                selectedName = nil
-                local manifest = nyxlib.loadManifest()
-                for name in pairs(manifest) do table.insert(names, name) end
-                table.sort(names)
-                for _, name in ipairs(names) do
-                    local e = manifest[name]
-                    local tag = e.removed and " (removed)" or (e.launch and "" or " (no launcher)")
-                    list:addItem({ text = name .. "  v" .. tostring(e.version or "?") .. "  " .. tostring(e.variant or "") .. tag,
-                        fg = e.removed and palette.lightGray or palette.white })
-                end
-                info:setText(#names == 0 and "No package installed yet. Open the Browse tab." or "Select a package.")
-            end
-            list:onSelect(function(self, index)
-                selectedName = names[index]
-                local e = selectedName and nyxlib.loadManifest()[selectedName]
-                if e then
-                    info:setText((e.description or "") .. "\nLaunch: " .. tostring(e.launch or "-") ..
-                        "   Service: " .. tostring(e.service or "-"))
-                end
-            end)
-            refresh()
-
-            local function need()
-                if not selectedName then info:setText("Select a package first.") end
-                return selectedName
-            end
-            local by = h - 5
-            ip:addButton():setText(" Launch"):setPosition(2, by):setSize(9, 1)
-                :setBackground(palette.green):setForeground(palette.black)
-                :onClick(function()
-                    local name = need(); if not name then return end
-                    local e = nyxlib.loadManifest()[name]
-                    if e and e.launch then runOnTerminal(e.launch)
-                    elseif e and e.service then openTerminal("service start " .. e.service)
-                    else info:setText(name .. " has no launcher (it is a library).") end
-                end)
-            ip:addButton():setText(" Update"):setPosition(12, by):setSize(9, 1)
-                :setBackground(accent):setForeground(palette.black)
-                :onClick(function() local n = need(); if n then openTerminal("apt update " .. n) end end)
-            ip:addButton():setText(" Remove"):setPosition(22, by):setSize(9, 1)
-                :setBackground(palette.red):setForeground(palette.white)
-                :onClick(function()
-                    local n = need(); if not n then return end
-                    confirm("Remove", "Remove " .. n .. " ?", function() openTerminal("apt remove " .. n) end)
-                end)
-            ip:addButton():setText(" Purge"):setPosition(32, by):setSize(8, 1)
-                :setBackground(palette.red):setForeground(palette.white)
-                :onClick(function()
-                    local n = need(); if not n then return end
-                    confirm("Purge", "Delete " .. n .. " and its config?", function() openTerminal("apt purge " .. n) end)
-                end)
-            ip:addButton():setText(" Refresh"):setPosition(2, by + 1):setSize(10, 1)
-                :setBackground(palette.lightBlue):setForeground(palette.black)
-                :onClick(refresh)
-
-            -------- browse
-            local bp = newPage()
-            bp:addLabel():setText("Search:"):setForeground(palette.white):setPosition(2, 1)
-            local searchInput = bp:addInput():setPosition(10, 1):setSize(w - 22, 1)
-                :setBackground(palette.gray):setForeground(palette.white):setText("")
-            local results, pick = {}, nil
-            local blist = bp:addList():setPosition(2, 3):setSize(w - 2, h - 9)
-                :setBackground(palette.gray):setForeground(palette.white)
-                :setSelectedBackground(accent):setSelectedForeground(palette.black)
-            local bstatus = bp:addLabel():setText("Type a name (empty = everything), then Search."):setForeground(palette.lightGray)
-                :setPosition(2, h - 5)
-            blist:onSelect(function(self, index) pick = results[index] end)
-
-            local searching = false
-            local function search()
-                if searching then return end
-                searching = true
-                bstatus:setText("Searching the registry...")
-                local q = trim(searchInput:getText())
-                basalt.schedule(function()
-                    local out, err = captureCommand("apt search " .. (q ~= "" and q or "*"))
-                    searching = false
-                    blist:clear()
-                    results, pick = {}, nil
-                    for line in (out or ""):gmatch("[^\n]+") do
-                        local name = line:match("^(%S+) v")
-                        if name then
-                            table.insert(results, name)
-                            blist:addItem(line)
-                        end
-                    end
-                    if #results > 0 then
-                        bstatus:setText(#results .. " package(s). Select one, then Install.")
-                    else
-                        bstatus:setText((err and tostring(err) or ((out and out ~= "") and out or "No result.")):sub(1, w - 4))
-                    end
-                end)
-            end
-            bp:addButton():setText(" Search"):setPosition(w - 11, 1):setSize(9, 1)
-                :setBackground(accent):setForeground(palette.black):onClick(search)
-            bp:addButton():setText(" Install"):setPosition(2, h - 4):setSize(10, 1)
-                :setBackground(palette.green):setForeground(palette.black)
-                :onClick(function()
-                    if pick then openTerminal("apt install " .. pick)
-                    else bstatus:setText("Select a package first.") end
-                end)
-
-            showPage(1)
-        end)
-
-        ------------------------------------------------------------
-        -- App: Task Manager
-        ------------------------------------------------------------
-        registerApp("Tasks", palette.orange, function(area)
-            local servicesOk, services = pcall(dofile, "/lib/services.lua")
-            local specs = dofile("/lib/specs.lua")
-            local procui = dofile("/lib/procui.lua")
-            local aw, ah = area:getWidth(), area:getHeight()
-
-            local pgs = {}
-            local function newPage()
-                local f = area:addFrame():setPosition(1, 3):setSize(aw, ah - 2):setBackground(desktopBg)
-                f:setVisible(false)
-                table.insert(pgs, f)
-                return f
-            end
-            local tabButtons = {}
-            local function showPage(i)
-                for j, f in ipairs(pgs) do f:setVisible(j == i) end
-                for j, b in ipairs(tabButtons) do
-                    b:setBackground(j == i and accent or palette.gray)
-                    b:setForeground(j == i and palette.black or palette.white)
-                end
-            end
-            area:addLabel():setText(" Task Manager"):setPosition(1, 1):setSize(aw, 1)
-                :setBackground(accent):setForeground(palette.black)
-            local tx = 2
-            for i, name in ipairs({ "Processes", "Specs", "Power" }) do
-                local b = area:addButton():setText(" " .. name .. " "):setPosition(tx, 2):setSize(#name + 2, 1)
-                b:onClick(function() showPage(i) end)
-                tabButtons[i] = b
-                tx = tx + #name + 3
-            end
-
-            ---------------- Processes ----------------
-            local pp = newPage()
-            local list = pp:addList():setPosition(2, 1):setSize(aw - 2, ah - 7)
-                :setBackground(palette.gray):setForeground(palette.white)
-                :setSelectedBackground(accent):setSelectedForeground(palette.black)
-            local info = pp:addLabel():setText(""):setForeground(palette.lightGray):setPosition(2, ah - 5)
-
-            local rows, selected = {}, nil
-            local kindColor = { shell = palette.cyan, service = palette.lime, job = palette.yellow,
-                system = palette.lightGray, ui = palette.pink }
-            local function refresh()
-                list:clear()
-                rows = {}
-                if not (servicesOk and services) then return end
-                local running = {}
-                for _, p in ipairs(services.processes()) do
-                    table.insert(rows, p)
-                    if p.kind == "service" then running[p.name] = true end
-                end
-                for _, def in ipairs(services.list()) do
-                    if not running[def.name] then
-                        table.insert(rows, { pid = 0, name = def.name, kind = "service", state = "stopped",
-                            user = "root", killable = false, description = def.description })
-                    end
-                end
-                for _, p in ipairs(rows) do
-                    list:addItem({
-                        text = string.format("%-4s %-13s %-8s %s",
-                            p.pid > 0 and p.pid or "-", tostring(p.name):sub(1, 13), p.kind, p.state),
-                        fg = p.state == "stopped" and palette.lightGray or (kindColor[p.kind] or palette.white),
-                    })
-                end
-            end
-            refresh()
-
-            list:onSelect(function(self, index)
-                selected = rows[index]
-                if selected then
-                    info:setText(((selected.description or selected.cmd or "")):sub(1, aw - 4))
-                end
-            end)
-
-            local function act(fn)
-                if not selected then info:setText("Select a row first."); return end
-                local okAct, msg = pcall(fn, selected)
-                info:setText(tostring(okAct and msg or ("Error: " .. tostring(msg))):sub(1, aw - 4))
-                refresh()
-            end
-            local by = ah - 3
-            pp:addButton():setText("Kill"):setPosition(2, by):setSize(7, 1)
-                :setBackground(palette.red):setForeground(palette.white)
-                :onClick(function()
-                    act(function(p)
-                        if not p.killable then return p.name .. " cannot be killed here." end
-                        local _, msg = procui.killPid(p.pid)
-                        return msg
-                    end)
-                end)
-            pp:addButton():setText("Start"):setPosition(10, by):setSize(8, 1)
-                :setBackground(palette.green):setForeground(palette.black)
-                :onClick(function()
-                    act(function(p)
-                        if p.kind ~= "service" then return "Only services can be started." end
-                        local pid, err = services.start(p.name)
-                        return pid and ("started " .. p.name .. " (pid " .. pid .. ")") or tostring(err)
-                    end)
-                end)
-            pp:addButton():setText("Stop"):setPosition(19, by):setSize(7, 1)
-                :setBackground(palette.orange):setForeground(palette.black)
-                :onClick(function()
-                    act(function(p)
-                        if p.kind ~= "service" or p.pid == 0 then return "Not a running service." end
-                        local _, msg = procui.killPid(p.pid)
-                        return msg
-                    end)
-                end)
-            pp:addButton():setText("Enable"):setPosition(27, by):setSize(8, 1)
-                :setBackground(accent):setForeground(palette.black)
-                :onClick(function()
-                    act(function(p)
-                        if p.kind ~= "service" then return "Only services have autostart." end
-                        services.setAutostart(p.name, true)
-                        return p.name .. ": autostart on"
-                    end)
-                end)
-            pp:addButton():setText("Disable"):setPosition(36, by):setSize(9, 1)
-                :setBackground(palette.gray):setForeground(palette.white)
-                :onClick(function()
-                    act(function(p)
-                        if p.kind ~= "service" then return "Only services have autostart." end
-                        services.setAutostart(p.name, false)
-                        return p.name .. ": autostart off"
-                    end)
-                end)
-            pp:addButton():setText("Refresh"):setPosition(2, by + 1):setSize(9, 1)
-                :setBackground(palette.lightBlue):setForeground(palette.black)
-                :onClick(function() refresh(); info:setText("Refreshed.") end)
-
-            ---------------- Specs ----------------
-            local sp = newPage()
-            local specBox = sp:addTextBox():setPosition(2, 1):setSize(aw - 2, ah - 4)
-                :setEditable(false):setBackground(palette.black):setForeground(palette.white)
-            local function loadSpecs()
-                local lines = {}
-                for _, row in ipairs(specs.collect()) do
-                    lines[#lines + 1] = string.format("%-14s %s", row[1], row[2])
-                end
-                specBox:setText(table.concat(lines, "\n"))
-            end
-            loadSpecs()
-            sp:addButton():setText("Refresh"):setPosition(2, ah - 3):setSize(9, 1)
-                :setBackground(palette.lightBlue):setForeground(palette.black)
-                :onClick(loadSpecs)
-
-            ---------------- Power ----------------
-            local pw = newPage()
-            pw:addLabel():setText("Power"):setForeground(accent):setPosition(2, 2)
-            pw:addButton():setText(" Reboot "):setPosition(2, 4):setSize(12, 3)
-                :setBackground(palette.orange):setForeground(palette.black)
-                :onClick(function() runOnTerminal("reboot") end)
-            pw:addButton():setText(" Shutdown "):setPosition(16, 4):setSize(14, 3)
-                :setBackground(palette.red):setForeground(palette.white)
-                :onClick(function() runOnTerminal("shutdown") end)
-
-            showPage(1)
-        end)
-
-        ------------------------------------------------------------
-        -- App: Settings (centered, four pages)
-        ------------------------------------------------------------
-        registerApp("Settings", palette.purple, function(area)
-            local aw, ah = area:getWidth(), area:getHeight()
-            local cw = math.min(aw - 2, 42)
-            local cx = math.floor((aw - cw) / 2) + 1
-
-            area:addLabel():setText(center("Settings", aw)):setPosition(1, 1):setSize(aw, 1)
-                :setBackground(accent):setForeground(palette.black)
-
-            local pgs, tabButtons = {}, {}
-            local function newPage()
-                local f = area:addFrame():setPosition(cx, 4):setSize(cw, ah - 4):setBackground(desktopBg)
-                f:setVisible(false)
-                table.insert(pgs, f)
-                return f
-            end
-            local function showPage(i)
-                for j, f in ipairs(pgs) do f:setVisible(j == i) end
-                for j, b in ipairs(tabButtons) do
-                    b:setBackground(j == i and accent or palette.gray)
-                    b:setForeground(j == i and palette.black or palette.white)
-                end
-            end
-            local tabNames = { "General", "Account", "Look", "System" }
-            local tabW = math.floor(cw / #tabNames)
-            for i, name in ipairs(tabNames) do
-                local b = area:addButton():setText(center(name, tabW)):setPosition(cx + (i - 1) * tabW, 2):setSize(tabW, 1)
-                b:onClick(function() showPage(i) end)
-                tabButtons[i] = b
-            end
-
-            local function section(parent, y, text, color)
-                parent:addLabel():setText(center(text, cw)):setPosition(1, y):setSize(cw, 1)
-                    :setBackground(color or palette.gray):setForeground(palette.black)
-            end
-            local function field(parent, y, label, text, masked)
-                parent:addLabel():setText(label):setForeground(palette.white):setPosition(1, y)
-                local input = parent:addInput():setPosition(1, y + 1):setSize(cw, 1)
-                    :setBackground(palette.gray):setForeground(palette.white):setText(text or "")
-                if masked then pcall(function() input:setReplaceChar("*") end) end
-                return input
-            end
-
-            ---------------- General ----------------
-            local gp = newPage()
-            section(gp, 1, "Computer", palette.cyan)
-            local hostInput = field(gp, 3, "Hostname", nyxlib.getHostname())
-            section(gp, 6, "Interface at boot", palette.lime)
-            local mode = config.uiMode or "shell"
-            local modeLabel = gp:addLabel():setText(""):setForeground(palette.white):setPosition(1, 8)
-            local function setModeLabel()
-                modeLabel:setText(("Current: " .. mode):sub(1, cw))
-            end
-            setModeLabel()
-            gp:addLabel():setText("shell: graphical shell  desktop: this"):setForeground(palette.lightGray):setPosition(1, 9)
-            gp:addLabel():setText("server: text shell + services"):setForeground(palette.lightGray):setPosition(1, 10)
-            local mx = 1
-            for _, m in ipairs({ "shell", "desktop", "server" }) do
-                gp:addButton():setText(" " .. m .. " "):setPosition(mx, 12):setSize(#m + 2, 1)
-                    :setBackground(palette.lightGray):setForeground(palette.black)
-                    :onClick(function() mode = m; setModeLabel() end)
-                mx = mx + #m + 3
-            end
-            local gstatus = gp:addLabel():setText(""):setForeground(palette.lightGray):setPosition(1, 15)
-            gp:addButton():setText(center("Save", 12)):setPosition(1, 14):setSize(12, 1)
-                :setBackground(accent):setForeground(palette.black)
-                :onClick(function()
-                    local okHost = pcall(nyxlib.setHostname, hostInput:getText())
-                    local cfg = nyxlib.loadTable("/etc/nyx-config.lua")
-                    cfg.uiMode = mode
-                    nyxlib.saveTable("/etc/nyx-config.lua", cfg)
-                    gstatus:setText(okHost and "Saved. Boot mode applies at next reboot." or "Could not save the hostname.")
-                end)
-
-            ---------------- Account ----------------
-            local ap = newPage()
-            section(ap, 1, "Change password" .. (username and (" - " .. username) or ""), palette.orange)
-            local oldInput = field(ap, 3, "Current password", "", true)
-            local newInput = field(ap, 6, "New password (empty = none)", "", true)
-            local confInput = field(ap, 9, "Confirm new password", "", true)
-            local astatus = ap:addLabel():setText(""):setForeground(palette.lightGray):setPosition(1, 14)
-            ap:addButton():setText(center("Change password", 20)):setPosition(1, 12):setSize(20, 1)
-                :setBackground(accent):setForeground(palette.black)
-                :onClick(function()
-                    if not username then astatus:setText("No active session."); return end
-                    local users = dofile("/lib/users.lua")
-                    if not users.checkPassword(username, oldInput:getText()) then
-                        astatus:setForeground(palette.red); astatus:setText("Current password is wrong."); return
-                    end
-                    local newPass = newInput:getText()
-                    if newPass ~= confInput:getText() then
-                        astatus:setForeground(palette.red); astatus:setText("The two passwords differ."); return
-                    end
-                    users.setPassword(username, newPass)
-                    oldInput:setText(""); newInput:setText(""); confInput:setText("")
-                    astatus:setForeground(palette.lime)
-                    astatus:setText(newPass == "" and "Password removed." or "Password changed.")
-                end)
-
-            ---------------- Look ----------------
-            local lp = newPage()
-            section(lp, 1, "Accent colour", palette.magenta)
-            local shown = math.min(#theme.presets, 5)
-            local themeList = lp:addList():setPosition(1, 2):setSize(cw, shown)
-                :setBackground(palette.gray):setForeground(palette.black)
-                :setSelectedBackground(palette.white):setSelectedForeground(palette.black)
-            for _, p in ipairs(theme.presets) do
-                themeList:addItem({ text = "  " .. p.name, bg = p.accent, fg = palette.black,
-                    selectedBg = p.accent, selectedFg = palette.white })
-            end
-            local chosen = nil
-            themeList:onSelect(function(self, index) chosen = theme.presets[index] end)
-
-            local bgOptions = {
-                { "Black", "black" }, { "Gray", "gray" }, { "Blue", "blue" }, { "Green", "green" },
-                { "Purple", "purple" }, { "Brown", "brown" },
-            }
-            local lrow = 2 + shown + 1
-            section(lp, lrow, "Desktop background", palette.lightBlue)
-            local bgChoice = config.desktopBg or "black"
-            local bgLabel = lp:addLabel():setText("Current: " .. bgChoice):setForeground(palette.white):setPosition(1, lrow + 1)
-            local bx, by2 = 1, lrow + 2
-            for _, opt in ipairs(bgOptions) do
-                local bw = #opt[1] + 2
-                if bx + bw > cw then bx = 1; by2 = by2 + 1 end
-                lp:addButton():setText(" " .. opt[1] .. " "):setPosition(bx, by2):setSize(bw, 1)
-                    :setBackground(palette[opt[2]] or palette.gray)
-                    :setForeground(opt[2] == "black" and palette.white or palette.black)
-                    :onClick(function() bgChoice = opt[2]; bgLabel:setText("Current: " .. bgChoice) end)
-                bx = bx + bw + 1
-            end
-            lp:addButton():setText(center("Apply", 10)):setPosition(1, by2 + 2):setSize(10, 1)
-                :setBackground(accent):setForeground(palette.black)
-                :onClick(function()
-                    if chosen then theme.save({ name = chosen.name, accent = chosen.accent }) end
-                    local cfg = nyxlib.loadTable("/etc/nyx-config.lua")
-                    cfg.desktopBg = bgChoice
-                    nyxlib.saveTable("/etc/nyx-config.lua", cfg)
-                    request = { restart = true }
-                    basalt.stop()
-                end)
-
-            ---------------- System ----------------
-            local syp = newPage()
-            section(syp, 1, "About", palette.yellow)
-            local release = "NyxOS"
-            if fs.exists("/etc/nyx-release") then
-                local f = fs.open("/etc/nyx-release", "r")
-                release = f.readLine() or release
-                f.close()
-            end
-            local lines = {
-                release,
-                "Hostname : " .. nyxlib.getHostname(),
-                "User     : " .. tostring(username or "-"),
-                "Home     : " .. home,
-                "HTTP     : " .. (http and "enabled" or "disabled"),
-                "Boot UI  : " .. (config.uiMode or "shell"),
-            }
-            for i, line in ipairs(lines) do
-                syp:addLabel():setText(line:sub(1, cw)):setForeground(palette.white):setPosition(1, 2 + i)
-            end
-            syp:addButton():setText(center("Task Manager", 16)):setPosition(1, 10):setSize(16, 1)
-                :setBackground(palette.orange):setForeground(palette.black)
-                :onClick(function() launchApp("Tasks") end)
-            syp:addButton():setText(center("Packages", 12)):setPosition(19, 10):setSize(12, 1)
-                :setBackground(palette.green):setForeground(palette.black)
-                :onClick(function() launchApp("Packages") end)
-
-            showPage(1)
+        content:onClickUp(function(self, btn, x, y)
+            if not drag then return end
+            local d = drag
+            drag = nil
+            if d.kind ~= "icon" or not d.moved then return end
+            local f = d.item.frame
+            -- nearest grid cell to the icon's centre
+            local col = math.floor((f:getX() + 4 - 2) / GW + 1.5)
+            local row = math.floor((f:getY() + 1 - 2) / GH + 1.5)
+            selectedId = nil
+            placeItem(d.item, col, row)
         end)
 
         ------------------------------------------------------------
         -- Taskbar: page switcher + Start menu
         ------------------------------------------------------------
-        pageLabel = taskbar:addLabel():setText(""):setForeground(palette.white):setPosition(w - 20, 1)
+        pageLabel = taskbar:addLabel():setText(""):setForeground(palette.white):setPosition(w - 20, 1):setSize(8, 1)
         pageLabel:onClick(function(self, btn, rx)
             if pages > 1 then
                 if rx <= 3 then page = page - 1 else page = page + 1 end
@@ -1217,36 +1026,52 @@ local function runOnce()
         end)
 
         local startMenu = nil
+        local function closeStart()
+            if startMenu then retire(startMenu); startMenu = nil end
+        end
         startButton:onClick(function()
-            if startMenu then
-                startMenu:setVisible(not startMenu:getVisible())
-                return
-            end
+            if startMenu then closeStart() return end
+            closeMenu()
             local entries = { { "Desktop", function() showDesktop() end } }
             for _, a in ipairs(apps) do
-                table.insert(entries, { a.name, function() a.launch() end })
+                table.insert(entries, { a.name, function() launchApp(a.name) end })
             end
+            table.insert(entries, { "New folder", function() newDesktopEntry(true) end })
             table.insert(entries, { "Exit to shell", function() runOnTerminal("shell") end })
             table.insert(entries, { "Reboot", function() runOnTerminal("reboot") end })
             table.insert(entries, { "Shutdown", function() runOnTerminal("shutdown") end })
-            local mw, mh = 16, #entries
-            local menu = main:addFrame():setSize(mw, mh):setPosition(1, h - mh):setBackground(palette.gray)
-            for i, e in ipairs(entries) do
+            local mw = 18
+            local mh = math.min(#entries, h - 2)
+            local menu = main:addFrame():setSize(mw, mh):setPosition(1, h - mh):setBackground(palette.gray):setZ(950)
+            for i = 1, mh do
+                local e = entries[i]
                 local bg, fg = palette.gray, palette.white
                 if i == 1 then bg, fg = accent, palette.black end
                 if e[1] == "Reboot" then bg, fg = palette.orange, palette.black end
                 if e[1] == "Shutdown" then bg, fg = palette.red, palette.white end
-                menu:addButton():setText(" " .. e[1]):setPosition(1, i):setSize(mw, 1)
+                menu:addButton():setText(" " .. t(e[1])):setPosition(1, i):setSize(mw, 1)
                     :setBackground(bg):setForeground(fg)
-                    :onClick(function() menu:setVisible(false); e[2]() end)
+                    :onClick(function() closeStart(); e[2]() end)
             end
             startMenu = menu
         end)
 
+        -- clicking anywhere else closes the Start menu
+        basalt.onEvent("mouse_click", function(btn, x, y)
+            if startMenu and not (y >= h - #startMenu.get("children") and x <= 18) and y < h then
+                closeStart()
+            end
+        end)
+
         showDesktop()
         basalt.run()
+    end, function(e)
+        if debug and debug.traceback then return debug.traceback(tostring(e), 2) end
+        return tostring(e)
     end)
 
+    if not ok then logger.crash("desktop", runErr) end
+    logger.info("desktop", "desktop stopped")
     pcall(function() dofile("/lib/services.lua").unregisterPseudo("desktop") end)
     return ok, runErr, request
 end
@@ -1260,6 +1085,7 @@ function desktop.run()
         local ok, err, request = runOnce()
         if not ok then
             print("Error while starting the desktop: " .. tostring(err))
+            print("Details: logs -e")
             return false
         end
         if request and request.command then

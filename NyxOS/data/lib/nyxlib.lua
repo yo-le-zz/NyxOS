@@ -117,6 +117,29 @@ function nyxlib.setHostname(name)
 end
 
 -- Formats a byte count into human-readable KB/MB/GB
+-- Command that starts an installed package, or nil for a library.
+-- Uses the `launch` field of app.json when the package declares one,
+-- otherwise guesses from the installed files (older registry entries).
+function nyxlib.launcherFor(name, entry)
+    if type(entry) ~= "table" or entry.removed then return nil end
+    if type(entry.launch) == "string" and entry.launch ~= "" then return entry.launch end
+    local base = tostring(name):gsub("%-client$", ""):gsub("%-server$", "")
+    for _, b in ipairs({ tostring(name), base }) do
+        for _, p in ipairs({ "/bin/" .. b .. ".lua", "/" .. b .. ".lua" }) do
+            if fs.exists(p) then return p end
+        end
+    end
+    local best
+    for _, f in ipairs(entry.files or {}) do
+        if type(f) == "string" and f:match("%.lua$") and fs.exists(f)
+            and (f:match("^/bin/[^/]+$") or f:match("^/[^/]+$")) then
+            if f:find("client", 1, true) or f:find(base, 1, true) then return f end
+            best = best or f
+        end
+    end
+    return best
+end
+
 function nyxlib.formatSize(bytes)
     if not bytes then
         return "?"

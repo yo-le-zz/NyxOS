@@ -114,7 +114,7 @@ function shellui.mount(basalt, main, opts)
                     return motd .. "\n\n"
                 end
             end
-            return "NyxOS Graphical Shell v1.1.1\nType 'help' for the command list, or 'man' for the manual.\n\n"
+            return "NyxOS Graphical Shell v1.2.0\nType 'help' for the command list, or 'man' for the manual.\n\n"
         end
 
         local redrawTabBar
@@ -194,6 +194,7 @@ function shellui.mount(basalt, main, opts)
 
         -- Runs a command in the active tab
         local busy, awaiting = false, false
+        local promptArmedAt = 0
         local function executeCommand(cmd)
             if cmd == nil or cmd == "" then
                 return
@@ -238,11 +239,17 @@ function shellui.mount(basalt, main, opts)
                         outputBox:setText(tab.output)
                         scrollToBottom(outputBox)
                     end
+                    -- The Enter that started the command may still be
+                    -- travelling through other handlers of the same key
+                    -- event: it must not answer the question. The prompt
+                    -- accepts answers only after a short delay.
+                    promptArmedAt = os.epoch("utc") + 300
                     awaiting = true
                     pcall(function() cmdInput:setReplaceChar(mask or "") end)
                     pcall(function() cmdInput:setPlaceholder("(answer, then Enter)") end)
                     cmdInput:setText("")
-                    cmdInput:setFocused(true)
+                    sleep(0.1)
+                    pcall(function() cmdInput:setFocused(true) end)
                     local _, answer = os.pullEvent("nyx_prompt_done")
                     awaiting = false
                     pcall(function() cmdInput:setReplaceChar("") end)
@@ -290,6 +297,7 @@ function shellui.mount(basalt, main, opts)
         -- Enter / Run: answers a pending question, or starts a command.
         local function submit()
             if awaiting then
+                if os.epoch("utc") < promptArmedAt then return end
                 local text = cmdInput:getText()
                 cmdInput:setText("")
                 os.queueEvent("nyx_prompt_done", text)
@@ -344,6 +352,12 @@ function shellui.mount(basalt, main, opts)
             end)
 
         cmdInput:setFocused(true)
+        -- Basalt focuses the element that was clicked last: when the
+        -- terminal is opened by a click (desktop), take the focus back.
+        basalt.schedule(function()
+            sleep(0.05)
+            pcall(function() cmdInput:setFocused(true) end)
+        end)
 
     -- Lets the embedding UI run a command in the active tab (e.g. the
     -- desktop's "Run" / "apt install" buttons).

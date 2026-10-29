@@ -64,7 +64,10 @@ function specs.collect()
     end
 
     -- Memory (the Lua heap is the only RAM a program can see)
-    add("Lua heap", string.format("%.0f KB", collectgarbage("count")))
+    if collectgarbage then
+        local okGc, kb = pcall(collectgarbage, "count")
+        if okGc and type(kb) == "number" then add("Lua heap", string.format("%.0f KB", kb)) end
+    end
 
     -- Network
     add("HTTP", http and "enabled" or "disabled")

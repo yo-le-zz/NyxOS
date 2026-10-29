@@ -14,7 +14,7 @@
 
 local nyxapi = {}
 
-nyxapi.VERSION = "1.1.1"
+nyxapi.VERSION = "1.2.0"
 
 local function lazy(path)
     local loaded = nil

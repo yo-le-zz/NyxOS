@@ -449,6 +449,7 @@ bca(os.pullEventRaw())if(b_a.isRunning)then dca()end end end
 while b_a.isRunning do local bda,cda=pcall(ada)if not(bda)then dd.header="Basalt Runtime Error"
 dd.error(cda)end end end;function b_a.getElementClass(_da)return cd.getElement(_da)end;function b_a.getAPI(_da)return
 cd.getAPI(_da)end
+function b_a.setErrorHandler(fn,soft)dd.onError=fn;dd.soft=soft and true or false end
 function b_a.onEvent(_da,ada)a_a(1,_da,"string")
 a_a(2,ada,"function")
 if not b_a._events[_da]then b_a._events[_da]={}end;table.insert(b_a._events[_da],ada)end
@@ -728,6 +729,7 @@ project["errorManager.lua"] = function(...) local d=require("log")
 local _a={tracebackEnabled=true,header="Basalt Error"}local function aa(ba,ca)term.setTextColor(ca)print(ba)
 term.setTextColor(colors.white)end
 function _a.error(ba)
+if _a.onError then pcall(_a.onError,ba)end;if _a.soft then return end
 if _a.errorHandled then error()end;term.setBackgroundColor(colors.black)
 term.clear()term.setCursorPos(1,1)
 aa(_a.header..":",colors.red)print()local ca=2;local da;while true do local db=debug.getinfo(ca,"Sl")
