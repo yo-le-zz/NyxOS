@@ -6,7 +6,7 @@
 -- installed/broken, a Recovery option repairs system files without
 -- touching your data (see also the standalone `recovery` command).
 
-local VERSION = "1.2.0"
+local VERSION = "1.3.0"
 local palette = colors or colours
 
 ------------------------------------------------------------------

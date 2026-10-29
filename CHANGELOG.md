@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0
+
+### Added
+- **Updates from GitHub tags** (`/lib/updater.lua`): the newest `X.Y.Z`
+  tag of the update repository (default `yo-le-zz/NyxOS`) is compared with
+  the installed version.
+- `nyxupdate [check|install|status|repo|auto|interval]` command.
+- Settings > **Update**: repository, automatic check on/off, interval,
+  "Check now" and "Install".
+- The desktop checks in the background and shows an **Update!** button
+  in the taskbar when a newer version exists.
+- `webinstall [owner/name [tag]]` can install a given repository/tag.
+
+### Safe update
+- Every file is downloaded before the installer replaces anything: a failed
+  download changes nothing. `/etc` (users, config) and `/home` are never
+  overwritten, and the update stops early if the free space is too small.
+
 ## 1.2.0
 
 ### Added

@@ -42,15 +42,16 @@ Chaque version fait l'objet d'un zip livré séparément.
 - [x] Logs système (erreurs Basalt, crashs d'apps), `sleep`, correctifs top / Files / sudo
 - [x] Icônes : clic = menu, clic puis clic vide = déplacer
 
-## 1.3.0 — Mises à jour automatiques
-- [ ] Lecture des tags GitHub (`vX.Y.Z`) — repo par défaut `yo-le-zz/NyxOS`
-- [ ] Repo configurable (`/etc/nyx-config.lua` → `updateRepo`, modifiable dans Settings)
-- [ ] Auto-update activable/désactivable dans Settings (+ fréquence)
-- [ ] Commande `nyxupdate [check|install|channel]`
-- [ ] Notification dans le bureau « mise à jour disponible »
-- [ ] Mise à jour sûre : téléchargement complet avant remplacement, rollback si échec,
-      jamais d'écrasement de `/etc` (users, config)
-- [ ] Respect du quota disque (1 Mo par défaut) : mise à jour fichier par fichier
+## 1.3.0 — Mises à jour automatiques ✅ (livrée)
+- [x] Lecture des tags GitHub (`X.Y.Z`) — repo par défaut `yo-le-zz/NyxOS`
+- [x] Repo configurable (`/etc/nyx-config.lua` → `updateRepo`, modifiable dans Settings)
+- [x] Auto-update activable/désactivable dans Settings (+ fréquence)
+- [x] Commande `nyxupdate [check|install|status|repo|auto|interval]`
+- [x] Notification dans le bureau « mise à jour disponible » (bouton Update!)
+- [x] Mise à jour sûre : tout est téléchargé avant remplacement, jamais d'écrasement de
+      `/etc` ni `/home`, arrêt si pas assez de place
+- [ ] Rollback complet (impossible avec le quota de 1 Mo : seulement « rien n'est remplacé
+      si le téléchargement échoue »)
 
 ## 1.4.0 — Vrai réseau + SSH
 - [ ] `/etc/network.lua` : interface(s), IP statique/DHCP-like, masque, passerelle

@@ -114,7 +114,7 @@ function shellui.mount(basalt, main, opts)
                     return motd .. "\n\n"
                 end
             end
-            return "NyxOS Graphical Shell v1.2.0\nType 'help' for the command list, or 'man' for the manual.\n\n"
+            return "NyxOS Graphical Shell v1.3.0\nType 'help' for the command list, or 'man' for the manual.\n\n"
         end
 
         local redrawTabBar

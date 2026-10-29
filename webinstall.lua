@@ -7,8 +7,12 @@
 -- boot.json is NOT downloaded: install.lua generates it on the target
 -- itself (writeBootJson), so there is no such file in the repository.
 
-local VERSION = "1.2.0"
-local REPO_BASE = "https://raw.githubusercontent.com/yo-le-zz/NyxOS/main/NyxOS"
+local VERSION = "1.3.0"
+-- Optional arguments: webinstall [owner/name [branch-or-tag]]  (used by nyxupdate)
+local args = { ... }
+local repo = (args[1] and args[1]:match("^[%w%-%._]+/[%w%-%._]+$")) or "yo-le-zz/NyxOS"
+local ref = (args[2] and args[2]:match("^[%w%-%._/]+$")) or "main"
+local REPO_BASE = "https://raw.githubusercontent.com/" .. repo .. "/" .. ref .. "/NyxOS"
 local palette = colors or colours
 
 -- Files to download (relative to NyxOS/)
@@ -48,6 +52,7 @@ local FILES = {
     "data/bin/net.lua",
     "data/bin/newterm.lua",
     "data/bin/nyx.lua",
+    "data/bin/nyxupdate.lua",
     "data/bin/passwd.lua",
     "data/bin/pkill.lua",
     "data/bin/ps.lua",
@@ -117,6 +122,7 @@ local FILES = {
     "data/lib/theme.lua",
     "data/lib/tmp.lua",
     "data/lib/toolkit.lua",
+    "data/lib/updater.lua",
     "data/lib/users.lua",
     "data/startup.lua",
 }

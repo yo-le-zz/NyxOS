@@ -50,6 +50,7 @@ local FILES = {
     "data/bin/net.lua",
     "data/bin/newterm.lua",
     "data/bin/nyx.lua",
+    "data/bin/nyxupdate.lua",
     "data/bin/passwd.lua",
     "data/bin/pkill.lua",
     "data/bin/ps.lua",
@@ -119,6 +120,7 @@ local FILES = {
     "data/lib/theme.lua",
     "data/lib/tmp.lua",
     "data/lib/toolkit.lua",
+    "data/lib/updater.lua",
     "data/lib/users.lua",
     "data/startup.lua",
 }

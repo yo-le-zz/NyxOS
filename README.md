@@ -1,6 +1,6 @@
 # 🚀 NyxOS
 
-> ⚠️ **Current version: 1.2.0**
+> ⚠️ **Current version: 1.3.0**
 >
 > Adds a graphical desktop, boot.json + disk installs (chainloaded via
 > the separate [NyxLoader](https://github.com/yo-le-zz/NyxLoader) project),
@@ -263,6 +263,16 @@ uninstall            # fully removes NyxOS, back to vanilla CC: Tweaked
 reset                # removes every apt-installed package, keeps the base OS
 recovery              # repairs core system files from GitHub, keeps your data
 ```
+
+### 🔄 `nyxupdate` -- updates
+```bash
+nyxupdate            # is a newer version out? (GitHub tags X.Y.Z)
+nyxupdate install    # download everything, then update (admin)
+nyxupdate repo you/NyxOS   # use another repository
+nyxupdate auto off         # no background check
+```
+The desktop shows an **Update!** button when a newer tag exists. Settings >
+Update has the same options. Users, config and `/home` are never touched.
 
 ### 🖥️ `desktop` -- graphical desktop
 ```bash

@@ -114,6 +114,33 @@ local function runOnce()
         local errorLabel = taskbar:addLabel()
             :setText(""):setForeground(palette.red):setPosition(w - 12, 1):setSize(3, 1)
 
+        -- Update notice (checked in the background, see /lib/updater.lua)
+        local updateInfo = nil
+        local updateButton = taskbar:addButton()
+            :setText(" Update! "):setPosition(w - 30, 1):setSize(9, 1)
+            :setBackground(palette.orange):setForeground(palette.black)
+        updateButton:setVisible(false)
+        updateButton:onClick(function()
+            if not updateInfo then return end
+            openDialog({ title = "Update", ok = "Yes", cancel = "No",
+                text = t("NyxOS %s is available (you have %s). Install now?", updateInfo.latest, updateInfo.current),
+                onOk = function() request = { command = "nyxupdate install" } basalt.stop() end })
+        end)
+        basalt.schedule(function()
+            sleep(4)
+            while true do
+                local okU, updater = pcall(dofile, "/lib/updater.lua")
+                if okU and http and updater.config().auto then
+                    local okC, info = logger.try("updater", function() return updater.check(false) end)
+                    if okC and type(info) == "table" and info.available then
+                        updateInfo = info
+                        pcall(function() updateButton:setVisible(true) end)
+                    end
+                end
+                sleep(1800)
+            end
+        end)
+
         basalt.schedule(function()
             while true do
                 clockLabel:setText(os.date("%H:%M:%S"))
@@ -261,7 +288,7 @@ local function runOnce()
 
         local function refreshTaskbar()
             local first = 10
-            local avail = w - 22 - first
+            local avail = w - 32 - first
             local n = math.min(#windows, MAX_TASK)
             local bw = n > 0 and math.max(5, math.min(14, math.floor(avail / n))) or 0
             for i = 1, MAX_TASK do

@@ -28,14 +28,18 @@ return {
         local function showPage(i)
             for j, f in ipairs(pgs) do f:setVisible(j == i) end
             for j, b in ipairs(tabButtons) do
-                b:setBackground(j == i and accent or palette.gray)
-                b:setForeground(j == i and palette.black or palette.white)
+                b:setBackground(j == i and accent or (j % 2 == 0 and palette.gray or palette.lightGray))
+                b:setForeground(j == i and palette.black or (j % 2 == 0 and palette.white or palette.black))
             end
         end
-        local tabNames = { "General", "Language", "Account", "Look", "Apps", "System" }
+        local tabNames = { "General", "Language", "Account", "Look", "Apps", "Update", "System" }
         local tabX = cx
+        local tabTotal = 0
+        for _, name in ipairs(tabNames) do tabTotal = tabTotal + #t(name) end
+        local roomy = (tabTotal + 2 * #tabNames <= aw - cx + 1)
+        if not roomy then tabX = 1 end
         for i, name in ipairs(tabNames) do
-            local label = " " .. t(name) .. " "
+            local label = roomy and (" " .. t(name) .. " ") or t(name)
             local b = area:addButton():setText(label):setPosition(tabX, 1):setSize(#label, 1)
             b:onClick(function() showPage(i) end)
             tabButtons[i] = b
@@ -53,6 +57,7 @@ return {
             if masked then pcall(function() input:setReplaceChar("*") end) end
             return input
         end
+        local function trimmed(v) return ctx.trim(v or "") end
         local function saveConfig(mutate)
             local cfg = nyxlib.loadTable("/etc/nyx-config.lua")
             mutate(cfg)
@@ -211,6 +216,65 @@ return {
             end)
 
         ---------------- System ----------------
+        ---------------- Update ----------------
+        local up = newPage()
+        local updater = dofile("/lib/updater.lua")
+        local ucfg = updater.config()
+        section(up, 1, t("Updates"), palette.cyan)
+        up:addLabel():setText(t("Repository (owner/name)")):setForeground(palette.white):setPosition(1, 2)
+        local repoInput = up:addInput():setPosition(1, 3):setSize(cw, 1)
+            :setBackground(palette.gray):setForeground(palette.white):setText(ucfg.repo)
+        local autoOn = ucfg.auto
+        local autoButton = up:addButton():setPosition(1, 5):setSize(cw, 1):setForeground(palette.black)
+        local function paintAuto()
+            autoButton:setText(center(t("Automatic check") .. ": " .. (autoOn and t("enabled") or t("disabled")), cw))
+            autoButton:setBackground(autoOn and palette.lime or palette.lightGray)
+        end
+        paintAuto()
+        autoButton:onClick(function() autoOn = not autoOn paintAuto() end)
+        up:addLabel():setText(t("Hours between checks")):setForeground(palette.white):setPosition(1, 6)
+        local hoursInput = up:addInput():setPosition(1, 7):setSize(8, 1)
+            :setBackground(palette.gray):setForeground(palette.white):setText(tostring(ucfg.interval))
+        local upStatus = up:addLabel():setText(""):setForeground(palette.lightGray):setPosition(1, 11):setSize(cw, 2)
+        local function say(text, colour)
+            upStatus:setText(tostring(text):sub(1, cw)):setForeground(colour or palette.lightGray)
+        end
+        local lastInfo = nil
+        local function saveUpdate()
+            local repo = trimmed(repoInput:getText())
+            if not repo:match("^[%w%-%._]+/[%w%-%._]+$") then say(t("Invalid name."), palette.red) return false end
+            local hours = tonumber(hoursInput:getText())
+            if not hours or hours < 1 or hours > 720 then say(t("Hours between checks") .. " 1-720", palette.red) return false end
+            local okSave = updater.setConfig("updateRepo", repo)
+                and updater.setConfig("autoUpdate", autoOn)
+                and updater.setConfig("updateInterval", math.floor(hours))
+            say(okSave and t("Saved.") or t("Error"), okSave and palette.lime or palette.red)
+            return okSave
+        end
+        up:addButton():setText(center(t("Apply"), 10)):setPosition(1, 9):setSize(10, 1)
+            :setBackground(accent):setForeground(palette.black):onClick(saveUpdate)
+        up:addButton():setText(center(t("Check now"), 14)):setPosition(12, 9):setSize(14, 1)
+            :setBackground(palette.cyan):setForeground(palette.black):onClick(function()
+                if not saveUpdate() then return end
+                say(t("Checking..."))
+                ctx.basalt.schedule(function()
+                    local okC, info, err = ctx.try("updater", function() return updater.check(true) end)
+                    if not okC or not info then say(t("Cannot check: %s", tostring(err or info)), palette.red) return end
+                    lastInfo = info
+                    if info.available then
+                        say(t("NyxOS %s is available (you have %s).", info.latest, info.current), palette.yellow)
+                    else
+                        say(t("You are up to date (%s).", info.current), palette.lime)
+                    end
+                end)
+            end)
+        up:addButton():setText(center(t("Install"), 10)):setPosition(27, 9):setSize(10, 1)
+            :setBackground(palette.orange):setForeground(palette.black):onClick(function()
+                if not lastInfo or not lastInfo.available then say(t("Check now"), palette.red) return end
+                ctx.confirm("Update", t("NyxOS %s is available (you have %s). Install now?", lastInfo.latest, lastInfo.current),
+                    function() ctx.runOnTerminal("nyxupdate install") end)
+            end)
+
         local syp = newPage()
         section(syp, 1, t("About"), palette.yellow)
         local release = "NyxOS"

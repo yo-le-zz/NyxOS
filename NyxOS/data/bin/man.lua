@@ -128,6 +128,7 @@ local pages = {
     },
     pkill = { "pkill <pattern>", "Stops every process whose name contains <pattern>." },
     killall = { "killall <name>", "Stops every process with exactly this name." },
+    nyxupdate = { "nyxupdate [check|install|status|repo <r>|auto <on|off>|interval <h>]", "Checks GitHub tags (X.Y.Z) of the update repository and installs the newest version. The desktop checks in the background and shows an Update! button." },
     sleep = { "sleep <seconds>", "Waits for <seconds> (decimals allowed, max 86400). Ctrl+T stops it. Try: bg sleep 200, then jobs." },
     calc = { "calc <expression>", "Evaluates a maths expression: calc 2*(3+4), calc sin(30) --deg. Supports pi, e, sqrt, ^, %, ans." },
     lang = { "lang [code]", "Shows the available language packs, or sets the language (en, fr, es, de...). Packs live in /etc/lang." },
