@@ -1,0 +1,34 @@
+{
+    "name": "cowsay",
+    "version": "1.0.0",
+    "description": "A talking cow in the terminal: cowsay <text>.",
+    "author": "yo-le-zz",
+    "type": [
+        "client"
+    ],
+    "client": {
+        "entry": "cowsay.lua",
+        "installer": "install.lua",
+        "uninstaller": "uninstall.lua",
+        "launch": "cowsay",
+        "icon": {
+            "palette": {
+                "w": "white",
+                "k": "black",
+                "p": "pink",
+                "b": "gray"
+            },
+            "pixels": [
+                "................",
+                ".bbbbbbbbbbbbbb.",
+                ".bwwwwwwwwwwwwb.",
+                ".bwkwwwwwwwkwwb.",
+                ".bwwwwwwwwwwwwb.",
+                ".bwwwppppppwwwb.",
+                ".bwwwwwwwwwwwwb.",
+                ".bbbbbbbbbbbbbb.",
+                "................"
+            ]
+        }
+    }
+}

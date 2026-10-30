@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.5.0
+
+### Added
+- **http / https** on the NyxOS network (`/lib/nyxhttp.lua`): `web get|raw|head|post`,
+  service `httpd` (serves `/var/www`), `nyxcert` (certificates; https uses a
+  shared-secret handshake and encrypts the traffic, there is no CA). Unknown
+  hosts fall back to the real internet through the CC `http` API.
+- **Browser** app (text pages, links, address bar).
+- **Marketplace**: the Packages app shows cards with one icon per package (a
+  unique icon is generated from the name when the package has none), a search
+  box, detail pane and Install / Launch / Update / Remove actions.
+- **Wallpapers** (`/lib/wallpaper.lua`, Settings > Wallpaper): animated globe,
+  starfield, ocean waves, plasma, matrix rain, night gradient or a picture
+  made with Paint. Icons are drawn transparently on top (Basalt `Image`
+  got a `transparent` property).
+- New apps: **Paint** (pixel editor, can set the wallpaper), **Globe**, **Snake**,
+  **2048**, **Minesweeper**, **System Monitor**.
+- New packages: `cowsay`, `fortune`, `snow`, `todo`.
+- Installer: animated globe intro and a globe spinning while files are copied.
+- Start menu uses several columns when there are many apps.
+
+### Changed
+- CCTchat 1.1.0: SHA-256 password hashing (per-user algorithm), login throttle,
+  `/quit` returns to the login menu, no screen clearing under the desktop
+  scheduler.
+- Services get a hidden window, so a service can no longer wipe the screen.
+- `apt search *` lists everything; `--out <file>` writes a machine-readable list.
+
+### Known limits
+- Tested in a CC:Tweaked simulator only; real multi-computer behaviour is unverified.
+- https needs the certificate to be copied to clients; SHA-256 streaming is slow in Lua.
+
+## 1.4.0
+
+### Added
+- **Virtual IP network** over rednet (`/lib/netstack.lua`): addresses
+  (static or DHCP), subnets, gateway/forwarding, datagrams, ping and
+  connection sockets with ports. `/etc/network.lua`, `/etc/hosts`,
+  `/etc/servers/*.lua` (server definitions: ip, ports, services).
+- Services `netd` (autostart), `dns`, `dhcpd`.
+- Commands `ifconfig`, `ping`, `nslookup`, `netstat`, `hosts`.
+- Task Manager: **Network** page.
+- Package **ssh** (NyxApps/ssh): `ssh`, `scp`, `ssh-keygen`, `ssh-copy-id`,
+  service `sshd` (key login by challenge, password login, home-folder
+  jail for non-admins, failed logins logged). Nothing is encrypted.
+
 ## 1.3.1
 
 ### Fixed

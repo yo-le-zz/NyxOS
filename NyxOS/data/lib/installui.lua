@@ -38,6 +38,24 @@ local function pause(seconds)
     if sleep then sleep(seconds) end
 end
 
+-- Globe animation (shares the renderer of the desktop wallpapers)
+local function globeSource(w, h)
+    if not ui.dataDir then return nil end
+    local path = fs.combine(ui.dataDir, "lib/wallpaper.lua")
+    if not fs.exists(path) then return nil end
+    local ok, wp = pcall(dofile, path)
+    if not ok or type(wp) ~= "table" then return nil end
+    local ok2, obj = pcall(wp.new, "globe", w, h)
+    if ok2 then return obj end
+end
+
+local function blitFrame(rows, x0, y0)
+    for i, r in ipairs(rows) do
+        term.setCursorPos(x0, y0 + i - 1)
+        term.blit(r[1], r[2], r[3])
+    end
+end
+
 local LOGO = {
     " _   _            ___  ____  ",
     "| \\ | |_   ___  _/ _ \\/ ___| ",
@@ -54,6 +72,16 @@ local GRADIENT = { palette.blue, palette.cyan, palette.lightBlue, palette.white 
 function ui.splash(version)
     local w, h = size()
     clear()
+    local g = globeSource(w, h)
+    if g then
+        for n = 0, 24 do
+            local ok, rows = pcall(g.frame, n * 1.5)
+            if not ok then break end
+            blitFrame(rows, 1, 1)
+            pause(0.05)
+        end
+        clear()
+    end
     local lw = #LOGO[1]
     local x0 = math.max(1, math.floor((w - lw) / 2) + 1)
     local y0 = math.max(1, math.floor(h / 2) - 5)
@@ -242,6 +270,9 @@ function ui.progress(total, title)
     local w, h = size()
     local done, frame = 0, 0
     local lastLines = {}
+    local gw, gh = 20, 10
+    local globe = (w >= 50 and h >= 14) and globeSource(gw, gh) or nil
+    local textW = globe and (w - gw - 3) or (w - 4)
     local function draw(current)
         clear()
         center(2, title or "Installing...", palette.cyan, palette.black)
@@ -257,7 +288,11 @@ function ui.progress(total, title)
         local spin = ({ "|", "/", "-", "\\" })[frame % 4 + 1]
         center(8, spin .. " " .. (current or ""):sub(1, w - 8), palette.lightGray, palette.black)
         for i, line in ipairs(lastLines) do
-            put(3, 10 + i - 1, line:sub(1, w - 4), palette.gray, palette.black)
+            put(3, 10 + i - 1, line:sub(1, textW), palette.gray, palette.black)
+        end
+        if globe then
+            local ok, rows = pcall(globe.frame, frame * 1.2)
+            if ok then blitFrame(rows, w - gw, h - gh) end
         end
     end
     local p = {}

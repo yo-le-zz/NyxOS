@@ -104,3 +104,39 @@ Each variant (`client` / `server`) of `app.json` may also declare:
   `/etc/<app>`, ...) and must never touch `/startup.lua`, `/boot.json` or
   `/nyxos.lua`. A file written to `/` is moved into `/bin` by `apt` and
   becomes a command.
+
+# 🌐 Network & ssh (NyxOS 1.4.0+)
+
+NyxOS has a virtual IP network over rednet (`/lib/netstack.lua`): addresses
+(`ifconfig`), names (`/etc/hosts`, service `dns`), DHCP (service `dhcpd`),
+`ping`, `netstat`, and sockets for packages:
+
+```lua
+local net = dofile("/lib/netstack.lua")
+local l = net.listen(8080, "myserver"); local c = l:accept(10)   -- server
+local c = net.connect("server1", 8080); c:send({...}); c:receive(5) -- client
+```
+
+A computer can be described by `/etc/servers/<name>.lua`:
+`return { name="web1", ip="10.0.1.7", gateway="10.0.1.1", dns="10.0.1.2", ports={[80]="web"}, services={"dns"} }`
+(listed services are started by `netd`). The `ssh` package (`apt install ssh`)
+adds `ssh`, `scp`, `ssh-keygen`, `ssh-copy-id` and the `sshd` service.
+Nothing is encrypted on the network: key logins never send the secret, password
+logins do send the password in clear.
+
+# 🌍 http / https (NyxOS 1.5.0+)
+
+```lua
+local web = dofile("/lib/nyxhttp.lua")
+local res, err = web.get("http://myserver/index.html")   -- res.status, res.headers, res.body
+web.post(url, data)
+web.serve({ port = 80 }, function(req) return { status = 200, body = "hi" } end)
+```
+`https://` works on the NyxOS network once the server certificate has been
+imported with `nyxcert import`. Unknown hosts go to the real internet when the
+CC `http` API is enabled.
+
+# 🎨 Package icons
+
+`client.icon` in `app.json` is a pixel icon (`palette` + 9 rows of 16 characters).
+Without it, the marketplace generates a unique icon from the package name.

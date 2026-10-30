@@ -939,8 +939,39 @@ local function runOnce()
             openMenu(x, y, entries)
         end
 
+        -- Wallpaper (see /lib/wallpaper.lua): when one is set the icons are
+        -- transparent images drawn over it, otherwise plain frames.
+        local wpGen = 0
+        local wpOn = false
+
+        local function iconBimg(it, sel)
+            local rows = iconlib.build(it.icon, "transparent")
+            local out = {}
+            for r = 1, 3 do
+                local row = rows[r]
+                out[r] = { " " .. row[1] .. " ", "0" .. row[2] .. "0", "t" .. row[3] .. "t" }
+            end
+            local name = center(it.label or it.name, 10)
+            local fgs, bgs = {}, {}
+            local acc = colors.toBlit(accent)
+            for i = 1, 10 do
+                local blank = name:sub(i, i) == " "
+                fgs[i] = sel and "f" or "0"
+                bgs[i] = blank and "t" or (sel and acc or "f")
+            end
+            out[4] = { name, table.concat(fgs), table.concat(bgs) }
+            return { out }
+        end
+
         -- One icon = a frame: pixel image (see /lib/icon.lua) + name
         local function buildIcon(panel, it, x, y)
+            if wpOn then
+                local img = panel:addImage():setPosition(x, y):setSize(10, 4):setZ(10)
+                img:setTransparent(true)
+                img:setBimg(iconBimg(it, false))
+                it.frame, it.transImg = img, true
+                return img
+            end
             local f = panel:addFrame():setPosition(x, y):setSize(10, 4):setBackground(desktopBg)
             it.frame = f
             local rows = iconlib.build(it.icon, config.desktopBg or "black")
@@ -952,7 +983,10 @@ local function runOnce()
 
         local function highlight()
             for _, it in ipairs(currentItems) do
-                if it.nameLabel then
+                if it.transImg then
+                    local sel = (it.id == selectedId)
+                    pcall(function() it.frame:setBimg(iconBimg(it, sel)) end)
+                elseif it.nameLabel then
                     local sel = (it.id == selectedId)
                     pcall(function()
                         it.nameLabel:setBackground(sel and accent or desktopBg)
@@ -987,6 +1021,34 @@ local function runOnce()
             local panel = content:addFrame()
                 :setPosition(1, 1):setSize(w, h - 1):setBackground(desktopBg):setZ(1)
             desktopPanel = panel
+            wpGen = wpGen + 1
+            wpOn = false
+            local wpId = config.wallpaper
+            if type(wpId) == "string" and wpId ~= "none" then
+                local okW, wallp = pcall(dofile, "/lib/wallpaper.lua")
+                local okO, obj = false, nil
+                if okW then
+                    okO, obj = pcall(wallp.new, wpId, w, h - 1, { path = config.wallpaperImage })
+                end
+                if okO and obj then
+                    wpOn = true
+                    local img = panel:addImage():setPosition(1, 1):setSize(w, h - 1):setZ(1)
+                    img:setBimg({ obj.frame(0) })
+                    local gen = wpGen
+                    if obj.animated and config.wallpaperAnimate ~= false then
+                        basalt.schedule(function()
+                            local n = 0
+                            while gen == wpGen do
+                                sleep(obj.delay or 0.2)
+                                if gen ~= wpGen then return end
+                                n = n + 1
+                                local okF, fr = pcall(obj.frame, n)
+                                if okF then pcall(function() img:setBimg({ fr }) end) end
+                            end
+                        end)
+                    end
+                end
+            end
             drag = (drag and drag.kind == "win") and drag or nil
             currentItems = collectItems()
             assignCells(currentItems)
@@ -1120,16 +1182,21 @@ local function runOnce()
             table.insert(entries, { "Exit to shell", function() runOnTerminal("shell") end })
             table.insert(entries, { "Reboot", function() runOnTerminal("reboot") end })
             table.insert(entries, { "Shutdown", function() runOnTerminal("shutdown") end })
-            local mw = 18
-            local mh = math.min(#entries, h - 2)
+            local colW = 18
+            local maxRows = math.max(3, h - 2)
+            local ncols = math.max(1, math.ceil(#entries / maxRows))
+            local mh = math.ceil(#entries / ncols)
+            local mw = colW * ncols
             local menu = main:addFrame():setSize(mw, mh):setPosition(1, h - mh):setBackground(palette.gray):setZ(950)
-            for i = 1, mh do
+            menu.menuW, menu.menuH = mw, mh
+            for i = 1, #entries do
                 local e = entries[i]
+                local col, row = math.floor((i - 1) / mh), (i - 1) % mh + 1
                 local bg, fg = palette.gray, palette.white
                 if i == 1 then bg, fg = accent, palette.black end
                 if e[1] == "Reboot" then bg, fg = palette.orange, palette.black end
                 if e[1] == "Shutdown" then bg, fg = palette.red, palette.white end
-                menu:addButton():setText(" " .. t(e[1])):setPosition(1, i):setSize(mw, 1)
+                menu:addButton():setText(" " .. t(e[1])):setPosition(col * colW + 1, row):setSize(colW, 1)
                     :setBackground(bg):setForeground(fg)
                     :onClick(function() closeStart(); e[2]() end)
             end
@@ -1138,7 +1205,7 @@ local function runOnce()
 
         -- clicking anywhere else closes the Start menu
         basalt.onEvent("mouse_click", function(btn, x, y)
-            if startMenu and not (y >= h - #startMenu.get("children") and x <= 18) and y < h then
+            if startMenu and not (y >= h - startMenu.menuH and x <= startMenu.menuW) and y < h then
                 closeStart()
             end
         end)

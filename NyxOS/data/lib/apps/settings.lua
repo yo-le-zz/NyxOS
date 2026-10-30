@@ -32,7 +32,7 @@ return {
                 b:setForeground(j == i and palette.black or (j % 2 == 0 and palette.white or palette.black))
             end
         end
-        local tabNames = { "General", "Language", "Account", "Look", "Apps", "Update", "System" }
+        local tabNames = { "General", "Language", "Account", "Look", "Wallpaper", "Apps", "Update", "System" }
         local tabX = cx
         local tabTotal = 0
         for _, name in ipairs(tabNames) do tabTotal = tabTotal + #t(name) end
@@ -181,6 +181,44 @@ return {
                 saveConfig(function(cfg) cfg.desktopBg = bgChoice end)
                 ctx.restart()
             end)
+
+        ---------------- Wallpaper ----------------
+        local wpPage = newPage()
+        section(wpPage, 1, t("Wallpaper"), palette.lightBlue)
+        local wpChoice = config.wallpaper or "none"
+        local wpAnim = config.wallpaperAnimate ~= false
+        local wpLabel = wpPage:addLabel():setForeground(palette.white):setPosition(1, 2):setSize(cw, 1)
+        local wpAnimBtn
+        local function wpRefresh()
+            wpLabel:setText(t("Current: %s", wpChoice))
+            if wpAnimBtn then wpAnimBtn:setText((wpAnim and "[x] " or "[ ] ") .. t("Animation")) end
+        end
+        local wx, wpY = 1, 4
+        for _, st in ipairs(dofile("/lib/wallpaper.lua").styles) do
+            local id = st.id
+            local label = " " .. t(st.name) .. " "
+            if wx + #label > cw then wx = 1; wpY = wpY + 1 end
+            local b = wpPage:addButton():setText(label):setPosition(wx, wpY):setSize(#label, 1)
+                :setBackground(palette.gray):setForeground(palette.white)
+            b:onClick(function() wpChoice = id; wpRefresh() end)
+            wx = wx + #label + 1
+        end
+        wpAnimBtn = wpPage:addButton():setText(""):setPosition(1, wpY + 2):setSize(cw, 1)
+            :setBackground(palette.black):setForeground(palette.white)
+        wpAnimBtn:onClick(function() wpAnim = not wpAnim; wpRefresh() end)
+        wpPage:addLabel():setText(t("Image: ~/.wallpaper.nfp (saved by the Paint app)")):setForeground(palette.lightGray)
+            :setPosition(1, wpY + 3):setSize(cw, 1)
+        wpPage:addButton():setText(center(t("Apply"), 10)):setPosition(1, math.min(wpY + 5, ph)):setSize(10, 1)
+            :setBackground(accent):setForeground(palette.black)
+            :onClick(function()
+                saveConfig(function(cfg)
+                    cfg.wallpaper = wpChoice
+                    cfg.wallpaperAnimate = wpAnim
+                    if wpChoice == "image" and not cfg.wallpaperImage then cfg.wallpaperImage = ctx.home .. "/.wallpaper.nfp" end
+                end)
+                ctx.restart()
+            end)
+        wpRefresh()
 
         ---------------- Apps ----------------
         local appsPage = newPage()

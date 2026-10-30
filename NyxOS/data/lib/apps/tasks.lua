@@ -28,7 +28,7 @@ return {
             end
         end
         local tx = 2
-        for i, name in ipairs({ "Processes", "Specs", "Power" }) do
+        for i, name in ipairs({ "Processes", "Specs", "Network", "Power" }) do
             local label = " " .. t(name) .. " "
             local b = area:addButton():setText(label):setPosition(tx, 1):setSize(#label, 1)
             b:onClick(function() showPage(i) end)
@@ -160,6 +160,35 @@ return {
         sp:addButton():setText(rl):setPosition(2, ph - 1):setSize(#rl, 1)
             :setBackground(palette.lightBlue):setForeground(palette.black)
             :onClick(loadSpecs)
+
+        ---------------- Network ----------------
+        local np = newPage()
+        local netBox = np:addTextBox():setPosition(2, 1):setSize(aw - 2, ph - 3)
+            :setEditable(false):setBackground(palette.black):setForeground(palette.white)
+        local function loadNet()
+            local okN, lines = ctx.try("network", function()
+                local net = dofile("/lib/netstack.lua")
+                local cfg, out = net.config(), {}
+                out[#out + 1] = string.format("%s  mask %s  (%s%s)", cfg.ip, cfg.mask, cfg.mode, cfg.leased and ", leased" or "")
+                out[#out + 1] = "gateway " .. tostring(cfg.gateway or "-") .. "   dns " .. tostring(cfg.dns or "-")
+                out[#out + 1] = (cfg.up and "up" or "DOWN") .. (cfg.forward and ", forwarding" or "")
+                local ifs = net.interfaces()
+                if #ifs == 0 then out[#out + 1] = "no modem" end
+                for _, i in ipairs(ifs) do out[#out + 1] = i.name .. " " .. (i.wireless and "wireless" or "wired") .. " " .. (i.open and "open" or "closed") end
+                local st = net.stats()
+                out[#out + 1] = "packets rx " .. st.rx .. "  tx " .. st.tx
+                out[#out + 1] = "-- listening"
+                for _, l in ipairs(net.listeners()) do out[#out + 1] = tostring(l.port) .. "  " .. l.name end
+                out[#out + 1] = "-- connections"
+                for _, c in ipairs(net.connections()) do out[#out + 1] = c.peer .. ":" .. tostring(c.peerPort) .. " " .. c.role end
+                return out
+            end)
+            netBox:setText(okN and table.concat(lines, "\n") or tostring(lines))
+        end
+        loadNet()
+        local nl = " " .. t("Refresh") .. " "
+        np:addButton():setText(nl):setPosition(2, ph - 1):setSize(#nl, 1)
+            :setBackground(palette.lightBlue):setForeground(palette.black):onClick(loadNet)
 
         ---------------- Power ----------------
         local pw = newPage()

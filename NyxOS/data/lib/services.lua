@@ -256,7 +256,11 @@ function services.start(name)
         services.setStatus(name, "crashed", "exec file not found: " .. def.exec)
         return nil, "exec file not found: " .. def.exec
     end
+    local width = 51
+    pcall(function() width = term.getSize() end)
+    local okW, win = pcall(window.create, term.current(), 1, 1, width, 200, false)
     return addThread(s, {
+        win = okW and win or nil,
         name = name, kind = "service", co = coroutine.create(newServiceThread(def)),
         user = def.owner or "root", cmd = def.program or def.exec, description = def.description,
     })

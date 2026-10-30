@@ -1,0 +1,34 @@
+{
+    "name": "fortune",
+    "version": "1.0.0",
+    "description": "Prints a random quote or a CC:Tweaked tip: fortune.",
+    "author": "yo-le-zz",
+    "type": [
+        "client"
+    ],
+    "client": {
+        "entry": "fortune.lua",
+        "installer": "install.lua",
+        "uninstaller": "uninstall.lua",
+        "launch": "fortune",
+        "icon": {
+            "palette": {
+                "y": "yellow",
+                "o": "orange",
+                "k": "black",
+                "w": "white"
+            },
+            "pixels": [
+                "................",
+                "....yyyyyyyyy...",
+                "...yyoooooooyy..",
+                "..yyoowwwwwooyy.",
+                "..yyowkkkkkwoyy.",
+                "..yyoowwwwwooyy.",
+                "...yyoooooooyy..",
+                "....yyyyyyyyy...",
+                "................"
+            ]
+        }
+    }
+}

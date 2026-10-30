@@ -105,6 +105,8 @@ end
 -- Renders a pixel icon as 3 blit rows over background colour `bgName`.
 -- Returns { {text, fg, bg}, ... } (Basalt "bimg" frame format).
 function icon.render(def, bgName)
+    local transparent = (bgName == "transparent")
+    if transparent then bgName = "black" end
     bgName = resolve(bgName) or "black"
     local g = grid(def)
     local rows = {}
@@ -113,9 +115,11 @@ function icon.render(def, bgName)
         for cx = 1, icon.CELLS_W do
             -- the six pixels of this cell, top-left first
             local px = {}
+            local solid = false
             for i = 0, 5 do
                 local x = (cx - 1) * 2 + (i % 2) + 1
                 local y = (cy - 1) * 3 + math.floor(i / 2) + 1
+                if g[y][x] then solid = true end
                 px[i + 1] = g[y][x] or bgName
             end
             -- two most representative colours: the most frequent one and
@@ -151,6 +155,7 @@ function icon.render(def, bgName)
             text[cx] = string.char(128 + bits)
             fgs[cx] = blitChar(fg)
             bgs[cx] = blitChar(bg)
+            if transparent and not solid then bgs[cx] = "t" end
         end
         rows[cy] = { table.concat(text), table.concat(fgs), table.concat(bgs) }
     end
@@ -229,6 +234,114 @@ function icon.save(name, def)
     f.write("return " .. textutils.serialize({ palette = def.palette, pixels = def.pixels }))
     f.close()
     return true
+end
+
+
+------------------------------------------------------------------
+-- Generated icons: every package gets its own icon, even when its
+-- author did not draw one. The look is derived from the name (colours,
+-- badge shape, decoration) and the first letter is drawn in the middle.
+------------------------------------------------------------------
+icon.font5x7 = {
+    ["0"] = { "01110", "10011", "10101", "10101", "10101", "11001", "01110" },
+    ["1"] = { "00100", "01100", "00100", "00100", "00100", "00100", "01110" },
+    ["2"] = { "01110", "10001", "00001", "00110", "01000", "10000", "11111" },
+    ["3"] = { "11110", "00001", "00001", "01110", "00001", "00001", "11110" },
+    ["4"] = { "00010", "00110", "01010", "10010", "11111", "00010", "00010" },
+    ["5"] = { "11111", "10000", "11110", "00001", "00001", "10001", "01110" },
+    ["6"] = { "00110", "01000", "10000", "11110", "10001", "10001", "01110" },
+    ["7"] = { "11111", "00001", "00010", "00100", "01000", "01000", "01000" },
+    ["8"] = { "01110", "10001", "10001", "01110", "10001", "10001", "01110" },
+    ["9"] = { "01110", "10001", "10001", "01111", "00001", "00010", "01100" },
+    ["A"] = { "01110", "10001", "10001", "11111", "10001", "10001", "10001" },
+    ["B"] = { "11110", "10001", "10001", "11110", "10001", "10001", "11110" },
+    ["C"] = { "01111", "10000", "10000", "10000", "10000", "10000", "01111" },
+    ["D"] = { "11110", "10001", "10001", "10001", "10001", "10001", "11110" },
+    ["E"] = { "11111", "10000", "10000", "11110", "10000", "10000", "11111" },
+    ["F"] = { "11111", "10000", "10000", "11110", "10000", "10000", "10000" },
+    ["G"] = { "01111", "10000", "10000", "10111", "10001", "10001", "01110" },
+    ["H"] = { "10001", "10001", "10001", "11111", "10001", "10001", "10001" },
+    ["I"] = { "11111", "00100", "00100", "00100", "00100", "00100", "11111" },
+    ["J"] = { "00111", "00010", "00010", "00010", "00010", "10010", "01100" },
+    ["K"] = { "10001", "10010", "10100", "11000", "10100", "10010", "10001" },
+    ["L"] = { "10000", "10000", "10000", "10000", "10000", "10000", "11111" },
+    ["M"] = { "10001", "11011", "10101", "10101", "10001", "10001", "10001" },
+    ["N"] = { "10001", "11001", "10101", "10011", "10001", "10001", "10001" },
+    ["O"] = { "01110", "10001", "10001", "10001", "10001", "10001", "01110" },
+    ["P"] = { "11110", "10001", "10001", "11110", "10000", "10000", "10000" },
+    ["Q"] = { "01110", "10001", "10001", "10001", "10101", "10010", "01101" },
+    ["R"] = { "11110", "10001", "10001", "11110", "10100", "10010", "10001" },
+    ["S"] = { "01111", "10000", "10000", "01110", "00001", "00001", "11110" },
+    ["T"] = { "11111", "00100", "00100", "00100", "00100", "00100", "00100" },
+    ["U"] = { "10001", "10001", "10001", "10001", "10001", "10001", "01110" },
+    ["V"] = { "10001", "10001", "10001", "10001", "10001", "01010", "00100" },
+    ["W"] = { "10001", "10001", "10001", "10101", "10101", "11011", "10001" },
+    ["X"] = { "10001", "10001", "01010", "00100", "01010", "10001", "10001" },
+    ["Y"] = { "10001", "10001", "01010", "00100", "00100", "00100", "00100" },
+    ["Z"] = { "11111", "00001", "00010", "00100", "01000", "10000", "11111" },
+}
+
+local SCHEMES = {
+    { body = "blue", light = "lightBlue", dark = "gray", ink = "white" },
+    { body = "green", light = "lime", dark = "gray", ink = "white" },
+    { body = "red", light = "pink", dark = "brown", ink = "white" },
+    { body = "orange", light = "yellow", dark = "brown", ink = "black" },
+    { body = "purple", light = "magenta", dark = "gray", ink = "white" },
+    { body = "cyan", light = "lightBlue", dark = "blue", ink = "white" },
+    { body = "magenta", light = "pink", dark = "purple", ink = "white" },
+    { body = "brown", light = "orange", dark = "black", ink = "white" },
+    { body = "lime", light = "yellow", dark = "green", ink = "black" },
+    { body = "gray", light = "lightGray", dark = "black", ink = "white" },
+}
+
+local function hashName(name)
+    local h = 5381
+    for i = 1, #name do h = (h * 33 + name:byte(i)) % 2147483647 end
+    return h
+end
+
+function icon.generate(name)
+    name = tostring(name or "?")
+    local h = hashName(name:lower())
+    local scheme = SCHEMES[h % #SCHEMES + 1]
+    local shape = math.floor(h / 10) % 4        -- decoration
+    local letter = name:upper():match("[A-Z0-9]") or "?"
+    local glyph = icon.font5x7[letter] or icon.font5x7["?"] or icon.font5x7["O"]
+    local W, H = 16, 9
+    local g = {}
+    for y = 1, H do g[y] = {} for x = 1, W do g[y][x] = "." end end
+    -- rounded badge 14 x 9 (x 2..15)
+    for y = 1, H do
+        for x = 2, 15 do
+            local corner = (y == 1 or y == H) and (x == 2 or x == 15)
+            if not corner then g[y][x] = "b" end
+        end
+    end
+    -- top light edge, bottom dark edge
+    for x = 3, 14 do g[1][x] = "l" g[H][x] = "d" end
+    -- decoration
+    if shape == 0 then
+        for y = 2, H - 1 do g[y][2] = "l" g[y][15] = "d" end
+    elseif shape == 1 then
+        for x = 3, 14, 2 do g[H - 1][x] = "l" end
+    elseif shape == 2 then
+        for y = 2, H - 1 do if (y % 2) == 0 then g[y][3] = "l" g[y][14] = "l" end end
+    else
+        for i = 0, 3 do g[2 + i][3 + i] = "l" end
+    end
+    -- the letter, 5 x 7 centred (x 6..10, y 2..8) -- one pixel row shorter at the bottom edge
+    for r = 1, 7 do
+        local row = glyph[r]
+        for c = 1, 5 do
+            if row:sub(c, c) == "1" then
+                local y, x = r + 1 - ((r == 7 and 0) or 0), c + 5
+                if y >= 1 and y <= H - 1 then g[y][x] = "i" end
+            end
+        end
+    end
+    local rows = {}
+    for y = 1, H do rows[y] = table.concat(g[y]) end
+    return { palette = { b = scheme.body, l = scheme.light, d = scheme.dark, i = scheme.ink }, pixels = rows }
 end
 
 ------------------------------------------------------------------

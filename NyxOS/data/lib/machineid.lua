@@ -42,7 +42,7 @@ end
 -- Full identity summary, similar to `hostnamectl status`.
 function machineid.info()
     local nyxlib = dofile("/lib/nyxlib.lua")
-    local release = "NyxOS 1.3.1"
+    local release = "NyxOS 1.5.0"
     if fs.exists("/etc/nyx-release") then
         local f = fs.open("/etc/nyx-release", "r")
         release = (f.readAll():match("^[^\n]+")) or release

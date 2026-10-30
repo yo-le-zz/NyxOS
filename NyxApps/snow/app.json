@@ -1,0 +1,34 @@
+{
+    "name": "snow",
+    "version": "1.0.0",
+    "description": "Animated snowfall in the terminal (any key to stop): snow.",
+    "author": "yo-le-zz",
+    "type": [
+        "client"
+    ],
+    "client": {
+        "entry": "snow.lua",
+        "installer": "install.lua",
+        "uninstaller": "uninstall.lua",
+        "launch": "snow",
+        "icon": {
+            "palette": {
+                "b": "blue",
+                "w": "white",
+                "k": "black",
+                "l": "lightBlue"
+            },
+            "pixels": [
+                "bbbbbbbbbbbbbbbb",
+                "bbwbbbbbbbwbbbbb",
+                "bbbbbbwbbbbbbbwb",
+                "bwbbbbbbbbwbbbbb",
+                "bbbbwbbbbbbbbbbb",
+                "bbbbbbbbwbbbwbbb",
+                "bwbbbbbbbbbbbbbb",
+                "bbbbbwbbbwbbbbwb",
+                "wwwwwwwwwwwwwwww"
+            ]
+        }
+    }
+}

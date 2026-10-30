@@ -1,6 +1,6 @@
 # 🚀 NyxOS
 
-> ⚠️ **Current version: 1.3.1**
+> ⚠️ **Current version: 1.5.0**
 >
 > Adds a graphical desktop, boot.json + disk installs (chainloaded via
 > the separate [NyxLoader](https://github.com/yo-le-zz/NyxLoader) project),
@@ -328,6 +328,17 @@ basalt.run()
 Prefer not bundling your own copy? Install it as a shared library once
 (`apt tool install basalt`) and pull it in with
 `dofile("/lib/toolkit.lua").require("basalt")` instead.
+
+### Wallpapers and apps (1.5.0)
+
+Settings > Wallpaper picks a static or animated wallpaper (globe, starfield,
+waves, plasma, matrix rain, or a picture drawn in **Paint**; Paint's
+*Wallpaper* button uses your drawing). Default apps: Calculator, Code Editor,
+Calendar, Clock, Notes, Browser, Paint, Globe, Snake, 2048, Minesweeper,
+System Monitor. The **Packages** app is the store (one icon per package).
+
+Web: `web get http://host/`, service `httpd`, `nyxcert` for https on the
+NyxOS network (see `man web`, `man nyxcert`).
 
 For scripts that want one entry point into every core subsystem
 (users, permissions, services, logging, db, networking...), see

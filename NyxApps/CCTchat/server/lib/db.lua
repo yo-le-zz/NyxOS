@@ -30,9 +30,9 @@ function M.userExists(user)
     return users[user] ~= nil
 end
 
-function M.addUser(user, hash, salt)
+function M.addUser(user, hash, salt, algo)
     local users = load()
-    users[user] = { hash = hash, salt = salt }
+    users[user] = { hash = hash, salt = salt, algo = algo }
     save(users)
 end
 

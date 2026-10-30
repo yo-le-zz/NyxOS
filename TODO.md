@@ -53,25 +53,37 @@ Chaque version fait l'objet d'un zip livré séparément.
 - [ ] Rollback complet (impossible avec le quota de 1 Mo : seulement « rien n'est remplacé
       si le téléchargement échoue »)
 
-## 1.4.0 — Vrai réseau + SSH
-- [ ] `/etc/network.lua` : interface(s), IP statique/DHCP-like, masque, passerelle
-- [ ] `/etc/hosts` + serveur/clients **DNS** (service `dns`, résolution de noms → ID/IP)
-- [ ] Fichiers de configuration serveur (`/etc/servers/*.lua` : ip, dns, ports, services)
-- [ ] Commandes : `ifconfig`, `ping`, `nslookup`, `hostname`, `netstat`
-- [ ] Couche transport au-dessus de rednet/modem (ports, sockets simples)
-- [ ] Package **ssh** (client + serveur) : shell distant, `scp`, clés/mots de passe
-- [ ] Task Manager : état réseau détaillé
+## 1.4.0 — Vrai réseau + SSH ✅ (livrée)
+- [x] `/etc/network.lua` : IP statique / DHCP, masque, passerelle
+- [x] `/etc/hosts` + service `dns`
+- [x] `/etc/servers/*.lua` (ip, dns, ports, services)
+- [x] `ifconfig`, `ping`, `nslookup`, `netstat`, `hosts`
+- [x] Couche transport (ports, sockets) au-dessus de rednet
+- [x] Package **ssh** (ssh, scp, clés, sshd)
+- [x] Task Manager : page réseau
+- [ ] Chiffrement du trafic (rien n'est chiffré pour l'instant)
 
-## 1.5.0 — Variables d'environnement, mémoire virtuelle, éditeur
+## 1.5.0 — Internet, marketplace, apps, fonds d'écran ✅ (livrée)
+- [x] http / https sur le réseau NyxOS (`/lib/nyxhttp.lua`, `web`, service `httpd`, `nyxcert`)
+      + repli sur le vrai internet (API `http` de CC)
+- [x] Navigateur (app **Browser**)
+- [x] CCTchat revu (login throttle, hash SHA-256 par utilisateur, /quit), vérifié en simulateur
+- [x] Marketplace refaite (Packages) : cartes, une icône par paquet (`icon.generate`)
+- [x] Nouvelles apps : Paint, Globe, Snake, 2048, Minesweeper, System Monitor
+- [x] Paquets : cowsay, fortune, snow, todo
+- [x] Fonds d'écran animés (`/lib/wallpaper.lua`) : globe, étoiles, vagues, plasma, matrix, image Paint
+- [x] Basalt : `Image:setTransparent` (icônes sur le fond d'écran)
+- [x] Installateur : globe animé, globe pendant la copie des fichiers
+- [x] Menu Démarrer multi-colonnes
+
+## 1.6.0 — Variables d'environnement, mémoire virtuelle, éditeur avancé
 - [ ] Variables d'environnement : `/etc/environment`, `~/.profile`, `export`, `env`,
       `unset`, `$VAR` dans le shell et dans `.nyx`
 - [ ] Mémoire virtuelle : fichier d'échange (swap) pour les gros jeux de données,
       API `vm.alloc/free/read/write`, commande `free`, affichage dans Specs
-- [ ] **Éditeur de code** (app bureau + commande `edit`) : onglets, coloration
-      Lua/.nyx/Python/C, recherche, sauvegarde, exécution
-- [ ] Éditeur : numéros de ligne, auto-indentation, annuler/refaire
+- [ ] Éditeur : coloration Python/C, numéros de ligne, auto-indentation, annuler/refaire
 
-## 1.6.0 — Langages externes (Python, C)
+## 1.7.0 — Langages externes (Python, C)
 - [ ] Registre d'interpréteurs `/etc/interpreters.lua` (`.py` → package python,
       `.c` → package c)
 - [ ] Hook shell : `python main.py` / `c main.c` → interpréteur du package
@@ -80,7 +92,7 @@ Chaque version fait l'objet d'un zip livré séparément.
       parse → exécution → traduction des appels système vers l'API NyxOS
 - [ ] Packages `python` et `c` : squelettes (le vrai interpréteur viendra plus tard)
 
-## 1.7.0 — Robustesse et finitions
+## 1.8.0 — Robustesse et finitions
 - [ ] Installation sur disque : réécriture des chemins sous NyxLoader (limite connue)
 - [ ] Priorités de processus, `nice`, limites de ressources
 - [ ] IPC simple entre processus (files de messages)

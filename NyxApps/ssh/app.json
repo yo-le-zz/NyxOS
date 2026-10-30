@@ -1,0 +1,40 @@
+{
+    "name": "ssh",
+    "version": "1.0.0",
+    "description": "Remote shell (ssh), file copy (scp) and keys for NyxOS machines on the same network.",
+    "author": "yo-le-zz",
+    "type": [
+        "client"
+    ],
+    "client": {
+        "entry": "ssh.lua",
+        "installer": "install.lua",
+        "uninstaller": "uninstall.lua",
+        "launch": "ssh",
+        "icon": {
+            "palette": {
+                "g": "gray",
+                "k": "black",
+                "l": "lime",
+                "w": "lightGray"
+            },
+            "pixels": [
+                "................",
+                ".gggggggggggggg.",
+                ".gkkkkkkkkkkkkg.",
+                ".gklkkkkkkkkkkg.",
+                ".gkkllkkkkkkkkg.",
+                ".gklkkkkwwwkkkg.",
+                ".gkkkkkkkkkkkkg.",
+                ".gggggggggggggg.",
+                "................"
+            ]
+        },
+        "service": {
+            "name": "sshd",
+            "program": "/lib/ssh/sshd.lua",
+            "autostart": false,
+            "description": "SSH server (port 22): enable with: service enable sshd"
+        }
+    }
+}

@@ -281,6 +281,9 @@ local function connectionLoop()
             if outcome == "lost" then
                 return "lost"
             end
+            if outcome == "quit" then
+                break -- /quit : deconnexion, retour au menu de connexion
+            end
             -- outcome == "rooms" -> on retourne au roomMenu
         end
     end

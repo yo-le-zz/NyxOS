@@ -3232,7 +3232,7 @@ project["elements/Image.lua"] = function(...) local aa=require("elementManager")
 local ba=aa.getElement("VisualElement")local ca=setmetatable({},ba)ca.__index=ca
 ca.defineProperty(ca,"bimg",{default={{}},type="table",canTriggerRender=true})
 ca.defineProperty(ca,"currentFrame",{default=1,type="number",canTriggerRender=true})
-ca.defineProperty(ca,"autoResize",{default=false,type="boolean"})
+ca.defineProperty(ca,"autoResize",{default=false,type="boolean"})ca.defineProperty(ca,"transparent",{default=false,type="boolean",canTriggerRender=true})
 ca.defineProperty(ca,"offsetX",{default=0,type="number",canTriggerRender=true})
 ca.defineProperty(ca,"offsetY",{default=0,type="number",canTriggerRender=true})
 ca.combineProperties(ca,"offset","offsetX","offsetY")
@@ -3334,7 +3334,7 @@ for cb,db in pairs(bb)do if(type(db)=="string")then ab[cb]=db end end;return ab 
 function ca:setMetadata(ab,bb)if(type(ab)=="table")then
 for db,_c in pairs(ab)do self:setMetadata(db,_c)end;return self end
 local cb=self.getResolved("bimg")if(type(bb)=="string")then cb[ab]=bb end;return self end
-function ca:render()ba.render(self)
+function ca:render()if not self.getResolved("transparent")then ba.render(self)end
 local ab=self.getResolved("bimg")[self.getResolved("currentFrame")]if not ab then return end;local bb=self.getResolved("offsetX")
 local cb=self.getResolved("offsetY")local db=self.getResolved("width")
 local _c=self.getResolved("height")
@@ -3345,7 +3345,12 @@ math.max(0,bb)
 if ad>0 then if bb<0 then local bd=math.abs(bb)+1
 cc=cc:sub(bd)dc=dc:sub(bd)_d=_d:sub(bd)end
 cc=cc:sub(1,ad)dc=dc:sub(1,ad)_d=_d:sub(1,ad)
-self:blit(math.max(1,1 +bb),y,cc,dc,_d)end end end end end;return ca end
+local x0=math.max(1,1+bb)
+if self.getResolved("transparent")then local i=1;local n=#cc
+while i<=n do while i<=n and _d:sub(i,i)=="t" do i=i+1 end
+local j=i;while j<=n and _d:sub(j,j)~="t" do j=j+1 end
+if j>i then self:blit(x0+i-1,y,cc:sub(i,j-1),dc:sub(i,j-1),_d:sub(i,j-1))end;i=j end
+else self:blit(x0,y,cc,dc,_d)end end end end end end;return ca end
 project["elements/Program.lua"] = function(...) local ca=require("elementManager")
 local da=ca.getElement("VisualElement")local _b=require("errorManager")local ab=setmetatable({},da)
 ab.__index=ab

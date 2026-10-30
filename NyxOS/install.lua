@@ -6,7 +6,7 @@
 -- installed/broken, a Recovery option repairs system files without
 -- touching your data (see also the standalone `recovery` command).
 
-local VERSION = "1.3.1"
+local VERSION = "1.5.0"
 local palette = colors or colours
 
 ------------------------------------------------------------------
@@ -816,7 +816,7 @@ local function main()
         local uiPath = fs.combine(dataDir, "lib/installui.lua")
         if fs.exists(uiPath) then
             local okUi, lib = pcall(dofile, uiPath)
-            if okUi and type(lib) == "table" then ui = lib end
+            if okUi and type(lib) == "table" then ui = lib; ui.dataDir = dataDir end
         end
     end
     local chosenLang, chosenApps = "en", nil

@@ -731,9 +731,9 @@ local function cmdInfo(pkgName)
     end
 end
 
-local function cmdSearch(term)
+local function cmdSearch(term, outFile)
     if not term then
-        print("Usage: apt search <term>")
+        print("Usage: apt search [--out <file>] <term>   ('*' = everything)")
         return
     end
     local folders, err = listNyxAppsFolders()
@@ -742,17 +742,34 @@ local function cmdSearch(term)
         return
     end
     local lowerTerm = term:lower()
+    local everything = (term == "*" or term == "")
     local any = false
+    local found = {}
     for _, folder in ipairs(folders) do
-        if folder:lower():find(lowerTerm, 1, true) then
+        if everything or folder:lower():find(lowerTerm, 1, true) then
             local app = fetchAppJson(folder)
             any = true
             if app then
-                print(app.name .. " v" .. tostring(app.version) .. " -- " .. tostring(app.description))
-            else
+                if not outFile then
+                    print(app.name .. " v" .. tostring(app.version) .. " -- " .. tostring(app.description))
+                end
+                -- the variant NyxOS would install: client when there is one
+                local variant = (type(app.client) == "table" and "client") or (type(app.server) == "table" and "server") or nil
+                local def = variant and app[variant] or {}
+                table.insert(found, {
+                    name = app.name, version = app.version, description = app.description, author = app.author,
+                    folder = folder, variant = variant, icon = def.icon, launch = def.launch,
+                    types = app.type, service = def.service and (def.service.name or app.name) or nil,
+                })
+            elseif not outFile then
                 print(folder)
             end
         end
+    end
+    if outFile then
+        local f = fs.open(outFile, "w")
+        if f then f.write(textutils.serialize(found)) f.close() end
+        return
     end
     if not any then
         print("No match for '" .. term .. "'.")
@@ -851,7 +868,7 @@ elseif cmd == "list" then
 elseif cmd == "info" then
     cmdInfo(args[2])
 elseif cmd == "search" then
-    cmdSearch(args[2])
+    if args[2] == "--out" then cmdSearch(args[4], args[3]) else cmdSearch(args[2]) end
 elseif cmd == "tool" then
     cmdTool(args[2], args[3], args[4])
 else

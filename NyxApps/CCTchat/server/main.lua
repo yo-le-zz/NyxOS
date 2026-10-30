@@ -41,6 +41,7 @@ cf.close()
 
 rednet.host(PROTOCOL, serverName)
 
+local failures, lastFail = {}, {}
 local clients = {} -- [id] = { user = ..., room = ... }
 local rooms = { general = { password = nil } }
 local peers = {} -- [id] = true : autres serveurs CCTchat connus (pour le datacenter)
@@ -49,6 +50,9 @@ local function log(msg, color)
     term.setTextColor(color or colors.white)
     print(msg)
     term.setTextColor(colors.white)
+    if color ~= colors.white and fs.exists("/lib/logger.lua") then
+        pcall(function() dofile("/lib/logger.lua").info("cctchat", msg) end)
+    end
 end
 
 local function logFile(text)
@@ -88,7 +92,7 @@ end
 -- Annonce ce serveur aux autres serveurs CCTchat du reseau (datacenter)
 rednet.broadcast({ action = "server_hello", name = serverName }, PROTOCOL)
 
-term.clear()
+if not _G.NYX_SCHED then term.clear() end
 term.setCursorPos(1, 1)
 term.setTextColor(colors.lime)
 print("=========================================")
@@ -125,7 +129,7 @@ while true do
             local added = 0
             for name, info in pairs(message.users or {}) do
                 if not db.userExists(name) and info.hash and info.salt then
-                    db.addUser(name, info.hash, info.salt)
+                    db.addUser(name, info.hash, info.salt, info.algo)
                     added = added + 1
                 end
             end
@@ -135,7 +139,7 @@ while true do
 
         elseif message.action == "sync_user" then
             if message.user and message.hash and message.salt and not db.userExists(message.user) then
-                db.addUser(message.user, message.hash, message.salt)
+                db.addUser(message.user, message.hash, message.salt, message.algo)
                 log("[sync] Compte synchronise : " .. message.user, colors.magenta)
             end
 
@@ -158,14 +162,15 @@ while true do
                 rednet.send(id, { action = "register_fail", reason = "Ce pseudo est deja pris." }, PROTOCOL)
             else
                 local salt = hash.randomSalt()
-                local h = hash.hashPassword(message.pass, salt)
-                db.addUser(message.user, h, salt)
+                local algo = hash.preferred
+                local h = hash.hashPassword(message.pass, salt, algo)
+                db.addUser(message.user, h, salt, algo)
                 rednet.send(id, { action = "register_ok" }, PROTOCOL)
                 log("[+] Nouveau compte cree : " .. message.user, colors.cyan)
 
                 -- On previent tous les autres serveurs connus pour tout synchroniser
                 for peerId, _ in pairs(peers) do
-                    rednet.send(peerId, { action = "sync_user", user = message.user, hash = h, salt = salt }, PROTOCOL)
+                    rednet.send(peerId, { action = "sync_user", user = message.user, hash = h, salt = salt, algo = algo }, PROTOCOL)
                 end
             end
 
@@ -173,9 +178,14 @@ while true do
             local u = db.getUser(message.user or "")
             if not u then
                 rednet.send(id, { action = "login_fail", reason = "Pseudo inconnu." }, PROTOCOL)
-            elseif hash.hashPassword(message.pass or "", u.salt) ~= u.hash then
+            elseif (failures[id] or 0) >= 5 and os.clock() - (lastFail[id] or 0) < 30 then
+                rednet.send(id, { action = "login_fail", reason = "Trop d'essais, patientez 30 s." }, PROTOCOL)
+            elseif hash.hashPassword(message.pass or "", u.salt, u.algo or "djb") ~= u.hash then
+                failures[id] = (failures[id] or 0) + 1
+                lastFail[id] = os.clock()
                 rednet.send(id, { action = "login_fail", reason = "Mot de passe incorrect." }, PROTOCOL)
             else
+                failures[id] = nil
                 for cid, info in pairs(clients) do
                     if info.user == message.user then clients[cid] = nil end
                 end
