@@ -161,15 +161,21 @@ end
 -- text fallback if it's unavailable/disabled.
 local function runInteractiveShell()
     local nyxlibOk, nyxlibForUi = pcall(dofile, "/lib/nyxlib.lua")
-    local uiMode = "shell"
+    local uiMode = "desktop"
     if nyxlibOk and nyxlibForUi then
         local cfg = nyxlibForUi.loadTable("/etc/nyx-config.lua")
-        uiMode = cfg.uiMode or "shell"
+        uiMode = cfg.uiMode or "desktop"
+        if cfg.profile == "server" then uiMode = "server" end
     end
 
     if uiMode == "server" then
         -- Headless-style server: plain text shell, services keep running
         -- in the background (see runWithShell).
+        local okSrv, serverui = pcall(dofile, "/lib/serverui.lua")
+        if okSrv and type(serverui) == "table" then
+            local okRun = pcall(serverui.run)
+            if okRun then return end
+        end
         term.setBackgroundColor(colors.black)
         term.setTextColor(colors.white)
         term.clear()

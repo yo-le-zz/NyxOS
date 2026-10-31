@@ -103,7 +103,7 @@ return {
                         installed = e and not e.removed or false,
                         updatable = e and not e.removed and tostring(e.version) ~= tostring(p.version) or false,
                         icon = (icon.isPixel(p.icon) and p.icon) or icon.generate(p.name),
-                        launch = p.launch, service = p.service, variant = p.variant,
+                        launch = p.launch, service = p.service, variant = p.variant, types = p.types,
                     }
                 end
             end
@@ -154,6 +154,7 @@ return {
         end
 
         ---------------- selection / actions
+        local install, task
         local function describe()
             local it = selected
             wipe(actionBar, actionEls)
@@ -182,29 +183,38 @@ return {
                 x = x + #label + 1
             end
             if not it.installed then
-                act("Install", palette.green, palette.black, function() ctx.openTerminal("apt install " .. it.name) end)
+                act("Install", palette.green, palette.black, function() install(it) end)
             else
                 if it.launch then
                     act("Launch", palette.green, palette.black, function() ctx.runOnTerminal(it.launch) end)
                 elseif it.service then
-                    act("Start service", palette.green, palette.black, function() ctx.openTerminal("service start " .. it.service) end)
+                    act("Start service", palette.green, palette.black, function() task(t("Service"), "service start " .. it.service) end)
                 end
-                act("Update", accent, palette.black, function() ctx.openTerminal("apt update " .. it.name) end)
+                act("Update", accent, palette.black, function() task(t("Updating %s", it.name), "apt update " .. it.name) end)
                 act("Remove", palette.orange, palette.black, function()
-                    ctx.confirm("Remove", t("Remove %s ?", it.name), function() ctx.openTerminal("apt remove " .. it.name) end)
+                    ctx.confirm("Remove", t("Remove %s ?", it.name), function() task(t("Removing %s", it.name), "apt remove " .. it.name) end)
                 end)
                 act("Purge", palette.red, palette.white, function()
-                    ctx.confirm("Purge", t("Delete %s and its config?", it.name), function() ctx.openTerminal("apt purge " .. it.name) end)
+                    ctx.confirm("Purge", t("Delete %s and its config?", it.name), function() task(t("Removing %s", it.name), "apt purge " .. it.name) end)
                 end)
             end
             act("Refresh", palette.lightBlue, palette.black, function() refreshView(true) end)
         end
 
+        function task(title, cmd)
+            ctx.needAdmin(function()
+                ctx.runTask(title, cmd, function() if ctx.alive() then refreshView() end end)
+            end)
+        end
+        function install(it)
+            ctx.installPackage(it.name, it.types, function() if ctx.alive() then refreshView() end end)
+        end
+
         local lastClick = { name = nil, at = 0 }
         local function defaultAction(it)
-            if not it.installed then ctx.openTerminal("apt install " .. it.name)
+            if not it.installed then install(it)
             elseif it.launch then ctx.runOnTerminal(it.launch)
-            elseif it.service then ctx.openTerminal("service start " .. it.service)
+            elseif it.service then task(t("Service"), "service start " .. it.service)
             else status:setText(t("%s has no launcher (it is a library).", it.name)) end
         end
 

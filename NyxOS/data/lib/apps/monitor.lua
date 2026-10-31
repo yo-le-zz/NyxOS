@@ -3,6 +3,7 @@ return {
     id = "monitor",
     name = "System Monitor",
     multi = false,
+    profiles = { "classic" },
     size = { 46, 15 },
     icon = {
         palette = { k = "black", g = "lime", d = "green", y = "yellow", r = "red", w = "lightGray" },

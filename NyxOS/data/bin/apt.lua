@@ -376,6 +376,8 @@ local function runInstaller(pkgName, runPath, meta)
         registryFolder = meta and meta.registryFolder or nil,
         depends = meta and meta.depends or nil,
         service = meta and meta.service or nil,
+        launch = meta and meta.launch or nil,
+        icon = meta and meta.icon or nil,
     }
     nyxlib.saveManifest(manifest)
 

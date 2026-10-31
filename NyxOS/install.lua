@@ -6,7 +6,7 @@
 -- installed/broken, a Recovery option repairs system files without
 -- touching your data (see also the standalone `recovery` command).
 
-local VERSION = "1.5.0"
+local VERSION = "1.7.0"
 local palette = colors or colours
 
 ------------------------------------------------------------------
@@ -397,7 +397,7 @@ local function installNyxLoader()
             local f = fs.open(tmpPath, "w")
             f.write(body)
             f.close()
-            local ok = shell.run(tmpPath)
+            local ok = shell.run(tmpPath, "--quiet")
             fs.delete(tmpPath)
             if ok then
                 print("NyxLoader installed.")
@@ -441,7 +441,7 @@ local function applyConfig(config, root)
 
         nyxlib.setHostname(config.hostname)
         theme.save({ name = config.themeName, accent = config.accent })
-        nyxlib.saveTable("/etc/nyx-config.lua", { gui = config.gui ~= false, lang = config.lang or "en", apps = config.apps })
+        nyxlib.saveTable("/etc/nyx-config.lua", { gui = config.gui ~= false, lang = config.lang or "en", apps = config.apps, profile = config.profile or "classic", uiMode = (config.profile == "server") and "server" or "desktop" })
 
         if users.count() == 0 then
             local ok, err = users.add(config.username, config.password, true)
@@ -465,7 +465,7 @@ local function applyConfig(config, root)
     f.close()
 
     nyxlib.saveTable(fs.combine(root, "etc/nyx-theme.lua"), { name = config.themeName, accent = config.accent })
-    nyxlib.saveTable(fs.combine(root, "etc/nyx-config.lua"), { gui = config.gui ~= false, lang = config.lang or "en", apps = config.apps })
+    nyxlib.saveTable(fs.combine(root, "etc/nyx-config.lua"), { gui = config.gui ~= false, lang = config.lang or "en", apps = config.apps, profile = config.profile or "classic", uiMode = (config.profile == "server") and "server" or "desktop" })
 
     local home = "home/" .. config.username
     ensureDir(fs.combine(root, home))
@@ -857,7 +857,18 @@ local function main()
     local basalt = loadBasalt(dataDir)
 
     local config
-    if basalt then
+    if ui and mode == "install" and ui.configure then
+        local okCfg, res = pcall(ui.configure, presets, t)
+        if okCfg and res == false then
+            print("Cancelled.")
+            return
+        elseif okCfg and type(res) == "table" then
+            config = res
+        end
+    end
+    if config then
+        -- configured with the animated questionnaire
+    elseif basalt then
         config = wizardBasalt(basalt, presets, mode)
         if config == false then
             print("Cancelled.")

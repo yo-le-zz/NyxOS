@@ -12,7 +12,7 @@ local cfg = nyxlib.loadTable("/etc/nyx-config.lua")
 
 if not args[1] then
     print("Graphical interface: " .. (nyxlib.guiEnabled() and "on" or "off"))
-    print("UI mode: " .. (cfg.uiMode or "shell"))
+    print("UI mode: " .. (cfg.uiMode or "desktop"))
     print("Usage: guimode on|off|shell|desktop|server")
     return
 end

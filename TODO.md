@@ -76,14 +76,27 @@ Chaque version fait l'objet d'un zip livré séparément.
 - [x] Installateur : globe animé, globe pendant la copie des fichiers
 - [x] Menu Démarrer multi-colonnes
 
-## 1.6.0 — Variables d'environnement, mémoire virtuelle, éditeur avancé
-- [ ] Variables d'environnement : `/etc/environment`, `~/.profile`, `export`, `env`,
-      `unset`, `$VAR` dans le shell et dans `.nyx`
-- [ ] Mémoire virtuelle : fichier d'échange (swap) pour les gros jeux de données,
-      API `vm.alloc/free/read/write`, commande `free`, affichage dans Specs
-- [ ] Éditeur : coloration Python/C, numéros de ligne, auto-indentation, annuler/refaire
+## 1.6.0 — Variables d'environnement, mémoire virtuelle, éditeur avancé ✅ (livrée)
+- [x] Variables d'environnement : `/etc/environment`, `~/.profile`, `export [-p|-g]`, `env`,
+      `printenv`, `unset`, `$VAR` / `${VAR}` / `~` dans le shell et dans `.nyx`
+- [x] Mémoire virtuelle : swap `/var/swap`, API `vm.alloc/free/read/write/stats`, commande `free`,
+      ligne Swap dans Specs
+- [x] Éditeur : annuler/refaire (Ctrl+Z / Ctrl+Y, boutons < >), auto-indentation,
+      coloration Lua/.nyx/Python/C selon l'extension
+- [ ] Éditeur : sélection multi-lignes, remplacement
 
-## 1.7.0 — Langages externes (Python, C)
+## 1.7.0 — Profils (Classic / Tablette / Serveur), installateur, correctifs UI ✅ (livrée)
+- [x] Trois profils : Classic, Tablette (incl. mini PC), Serveur (`profile`, Settings, installateur)
+- [x] UI adaptée : fenêtres maximisées + menu compact en Tablette, tableau de bord texte en Serveur
+- [x] Mode bureau (GUI) par défaut
+- [x] Installateur : questionnaire (profil, hostname, utilisateur, mot de passe, accent) dans le style des menus de langue
+- [x] Installation de paquets depuis l'UI sans terminal (choix client/serveur, mot de passe admin, boîte de tâche)
+- [x] Icônes des apps installées individuellement (manifeste apt `launch`/`icon`)
+- [x] Déplacement des fenêtres : mode « placer » (clic sur le titre, flèches, clic pour poser)
+- [x] Redionet : client corrigé (1.1.2)
+- [x] NyxLoader 1.1.0 (ASCII, redémarrage auto, installateur NyxOS)
+
+## 1.8.0 — Langages externes (Python, C)
 - [ ] Registre d'interpréteurs `/etc/interpreters.lua` (`.py` → package python,
       `.c` → package c)
 - [ ] Hook shell : `python main.py` / `c main.c` → interpréteur du package
@@ -92,7 +105,7 @@ Chaque version fait l'objet d'un zip livré séparément.
       parse → exécution → traduction des appels système vers l'API NyxOS
 - [ ] Packages `python` et `c` : squelettes (le vrai interpréteur viendra plus tard)
 
-## 1.8.0 — Robustesse et finitions
+## 1.9.0 — Robustesse et finitions
 - [ ] Installation sur disque : réécriture des chemins sous NyxLoader (limite connue)
 - [ ] Priorités de processus, `nice`, limites de ressources
 - [ ] IPC simple entre processus (files de messages)
@@ -107,3 +120,23 @@ Chaque version fait l'objet d'un zip livré séparément.
 - [ ] `apt` : import de projets PineStore.cc
 - [ ] Gestionnaire de flotte de turtles
 - [ ] `.nyx` : arithmétique et contrôle de flux enrichi
+
+---
+
+## Turtles (roadmap long terme, tout à la fin)
+- [ ] Profil « Turtle » : détection `turtle`, UI texte minimale, démarrage automatique d'un job
+- [ ] Gestionnaire de flotte : liste/état/carburant/position de toutes les turtles (modem/Redionet)
+- [ ] Contrôle à distance : console, déplacement manuel, caméra d'inventaire
+- [ ] GPS : hôte GPS, calibration, `gps locate`, cartes de positions
+- [ ] Pathfinding A* avec carte du monde partagée et évitement de collision entre turtles
+- [ ] Programmes de minage : tunnel, branche, chambre, veine, mine en carrière (quarry)
+- [ ] Programmes de ferme : blé, arbres, canne, élevage, ferme à mobs
+- [ ] Construction : plans (`.nfp`/schéma), murs, sols, bâtiments, copie de zone
+- [ ] Gestion d'inventaire : tri, coffre-dépôt automatique, déchargement, recharge de carburant
+- [ ] Gestion du carburant : retour automatique à la base, estimation de trajet
+- [ ] Planificateur de tâches (file de jobs, priorités, reprise après redémarrage)
+- [ ] Éditeur de jobs visuel et scripts `.nyx` dédiés turtle
+- [ ] Packages `apt` « turtle » (variantes client turtle / serveur de flotte)
+- [ ] Journal et alertes (turtle bloquée, plus de carburant, inventaire plein)
+- [ ] Synchronisation d'état au reboot (reprise de position et de tâche)
+- [ ] Tableau de bord flotte dans l'UI Serveur (carte, jobs, carburant)

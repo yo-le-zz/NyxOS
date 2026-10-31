@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.7.0
+
+### Added
+- Three profiles: **Classic**, **Tablet** (also for mini PCs / small screens) and **Server**; `profile` command, Settings > General, chosen in the installer. UI and menus adapt: tablet = maximized windows, compact Start menu with open-window list; server = text dashboard (`serverui`: services, logs, network, shell, reboot/shutdown).
+- Desktop (GUI) mode is the default.
+- Installer questionnaire (profile, hostname, username, password, accent) rebuilt in the style of the language menu.
+- Package install from the UI without a terminal: client/server choice dialog, admin password dialog, task box with output and prompt answers.
+- Window moving: "place" mode (click the title bar, move with mouse or arrow keys, click to drop).
+
+### Fixed
+- Desktop icons missing for individually installed apps (apt manifest keeps `launch`/`icon`).
+- Redionet client not launching (no-modem handling, server wait timeout, reload) - 1.1.2.
+- Packages app: Install button crashed (function used before definition).
+- Shell prompts no longer swallow held Enter before the user can choose client/server or type the sudo password.
+
+### NyxLoader
+- New NyxLoader 1.1.0 delivered separately (ASCII-only text, auto reboot, NyxOS-style installer).
+
+## 1.6.0
+
+### Added
+- **Environment variables** (`/lib/env.lua`): `export [-p|-g] NAME=value`, `unset`,
+  `env`, `printenv`; `$VAR`, `${VAR}` and `~` are expanded in the graphical shell,
+  the desktop terminal and `.nyx` scripts. Loaded from `/etc/environment` and
+  `~/.profile`; built-ins HOME, USER, HOSTNAME, PWD, PATH, LANG.
+- **Virtual memory** (`/lib/vm.lua`): disk-backed blocks in `/var/swap` with an LRU
+  page cache sized from the storage tier; `free` command; Swap / Lua heap in Specs.
+- **Code Editor**: undo / redo (Ctrl+Z, Ctrl+Y, `<` `>` buttons), auto-indent after
+  Enter, Python and C colouring (language follows the file extension), Ctrl+S.
+
+### Notes
+- Expansion happens in the desktop terminal / graphical shell (not in the bare CC shell).
+
 ## 1.5.0
 
 ### Added

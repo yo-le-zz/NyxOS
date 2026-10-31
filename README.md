@@ -1,6 +1,6 @@
 # 🚀 NyxOS
 
-> ⚠️ **Current version: 1.5.0**
+> ⚠️ **Current version: 1.7.0**
 >
 > Adds a graphical desktop, boot.json + disk installs (chainloaded via
 > the separate [NyxLoader](https://github.com/yo-le-zz/NyxLoader) project),
@@ -329,7 +329,7 @@ Prefer not bundling your own copy? Install it as a shared library once
 (`apt tool install basalt`) and pull it in with
 `dofile("/lib/toolkit.lua").require("basalt")` instead.
 
-### Wallpapers and apps (1.5.0)
+### Wallpapers and apps (1.6.0)
 
 Settings > Wallpaper picks a static or animated wallpaper (globe, starfield,
 waves, plasma, matrix rain, or a picture drawn in **Paint**; Paint's
@@ -345,6 +345,15 @@ For scripts that want one entry point into every core subsystem
 `/lib/nyxapi.lua`.
 
 ---
+
+### Profiles (1.7.0)
+
+Three profiles, chosen in the installer or with `profile classic|tablet|server` (also Settings > General):
+- **Classic** -- full desktop with floating windows.
+- **Tablet** -- also for mini PCs and small screens: maximized windows, compact Start menu listing open windows.
+- **Server** -- no desktop, a text dashboard (`serverui`) for services, logs, network, shell, reboot and shutdown.
+
+Desktop (GUI) mode is the default. Windows are moved with the "place" mode: click the title bar, move with the mouse or arrow keys, click to drop.
 
 ## 🛡️ Security
 

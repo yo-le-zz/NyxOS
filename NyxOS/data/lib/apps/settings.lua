@@ -68,16 +68,17 @@ return {
         local gp = newPage()
         section(gp, 1, t("Computer"), palette.cyan)
         local hostInput = field(gp, 2, t("Hostname"), nyxlib.getHostname())
-        section(gp, 5, t("Interface at boot"), palette.lime)
-        local mode = config.uiMode or "shell"
+        section(gp, 5, t("Profile"), palette.lime)
+        local profileLib = dofile("/lib/profile.lua")
+        local mode = profileLib.current()
         local modeLabel = gp:addLabel():setText(""):setForeground(palette.white):setPosition(1, 6):setSize(cw, 1)
         local function setModeLabel() modeLabel:setText((t("Current: %s", mode)):sub(1, cw)) end
         setModeLabel()
-        gp:addLabel():setText(t("shell: graphical shell"):sub(1, cw)):setForeground(palette.lightGray):setPosition(1, 7)
-        gp:addLabel():setText(t("desktop: this desktop"):sub(1, cw)):setForeground(palette.lightGray):setPosition(1, 8)
-        gp:addLabel():setText(t("server: text shell + services"):sub(1, cw)):setForeground(palette.lightGray):setPosition(1, 9)
+        gp:addLabel():setText(t("classic: windows, every app"):sub(1, cw)):setForeground(palette.lightGray):setPosition(1, 7)
+        gp:addLabel():setText(t("tablet: small screens, full-screen apps"):sub(1, cw)):setForeground(palette.lightGray):setPosition(1, 8)
+        gp:addLabel():setText(t("server: text console + services"):sub(1, cw)):setForeground(palette.lightGray):setPosition(1, 9)
         local mx = 1
-        for _, m in ipairs({ "shell", "desktop", "server" }) do
+        for _, m in ipairs({ "classic", "tablet", "server" }) do
             gp:addButton():setText(" " .. m .. " "):setPosition(mx, 10):setSize(#m + 2, 1)
                 :setBackground(palette.lightGray):setForeground(palette.black)
                 :onClick(function() mode = m; setModeLabel() end)
@@ -88,7 +89,7 @@ return {
             :setBackground(accent):setForeground(palette.black)
             :onClick(function()
                 local okHost = pcall(nyxlib.setHostname, hostInput:getText())
-                saveConfig(function(cfg) cfg.uiMode = mode end)
+                saveConfig(function(cfg) for k, v in pairs(profileLib.fields(mode)) do cfg[k] = v end end)
                 gstatus:setText((okHost and t("Saved. Boot mode applies at next reboot.") or t("Could not save the hostname.")):sub(1, cw))
             end)
 
@@ -327,7 +328,7 @@ return {
             t("User") .. " : " .. tostring(username or "-"),
             t("Home") .. " : " .. ctx.home,
             "HTTP : " .. (http and t("enabled") or t("disabled")),
-            t("Boot interface") .. " : " .. (config.uiMode or "shell"),
+            t("Profile") .. " : " .. profileLib.current(),
         }
         for i, line in ipairs(lines) do
             syp:addLabel():setText(line:sub(1, cw)):setForeground(palette.white):setPosition(1, 1 + i)

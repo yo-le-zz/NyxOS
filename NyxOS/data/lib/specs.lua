@@ -98,6 +98,14 @@ function specs.collect()
     add("Uptime (CC)", fmtDuration(safe(os.clock, 0)))
     add("Time", safe(function() return os.date("%d/%m/%Y %H:%M:%S") end, "?"))
 
+    -- Virtual memory
+    local vmStats = safe(function() return dofile("/lib/vm.lua").stats() end)
+    if vmStats then
+        add("Swap", fmtBytes(vmStats.bytes) .. " / " .. fmtBytes(vmStats.limit))
+    end
+    local lua = safe(function() return collectgarbage("count") end)
+    if lua then add("Lua heap", fmtBytes(lua * 1024)) end
+
     -- NyxOS
     local release = safe(function()
         local f = fs.open("/etc/nyx-release", "r")

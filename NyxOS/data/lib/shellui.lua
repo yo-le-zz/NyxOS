@@ -114,7 +114,7 @@ function shellui.mount(basalt, main, opts)
                     return motd .. "\n\n"
                 end
             end
-            return "NyxOS Graphical Shell v1.5.0\nType 'help' for the command list, or 'man' for the manual.\n\n"
+            return "NyxOS Graphical Shell v1.7.0\nType 'help' for the command list, or 'man' for the manual.\n\n"
         end
 
         local redrawTabBar
@@ -243,7 +243,7 @@ function shellui.mount(basalt, main, opts)
                     -- travelling through other handlers of the same key
                     -- event: it must not answer the question. The prompt
                     -- accepts answers only after a short delay.
-                    promptArmedAt = os.epoch("utc") + 300
+                    promptArmedAt = os.epoch("utc") + 700
                     awaiting = true
                     pcall(function() cmdInput:setReplaceChar(mask or "") end)
                     pcall(function() cmdInput:setPlaceholder("(answer, then Enter)") end)
@@ -306,9 +306,11 @@ function shellui.mount(basalt, main, opts)
             end
         end
 
-        cmdInput:onKey(function(self, key)
+        cmdInput:onKey(function(self, key, held)
             local tab = activeTab
             if key == keys.enter or key == keys.numPadEnter then
+                -- a held Enter repeats: it must never answer a question by itself
+                if held and awaiting then return end
                 submit()
             elseif key == keys.up then
                 if tab.historyIndex > 1 then

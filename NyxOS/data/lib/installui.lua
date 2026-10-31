@@ -228,6 +228,115 @@ function ui.chooseLanguage(dataDir)
     return langs[idx].code
 end
 
+-- One text question in the same style as the menus (title, subtitle, divider,
+-- an input line). Returns the text typed, or nil when Escape-like empty input
+-- is not allowed. opts: default, mask, required, help
+function ui.input(title, subtitle, opts)
+    opts = opts or {}
+    local w, h = size()
+    while true do
+        clear()
+        center(2, title, palette.cyan, palette.black)
+        if subtitle then center(3, subtitle, palette.lightGray, palette.black) end
+        put(1, 4, string.rep("\140", w), palette.gray, palette.black)
+        put(3, 7, opts.label or "> ", palette.cyan, palette.black)
+        put(1, h, string.rep(" ", w), palette.white, palette.gray)
+        put(2, h, opts.help or "Type, then Enter", palette.white, palette.gray)
+        term.setCursorPos(3 + #(opts.label or "> "), 7)
+        term.setBackgroundColor(palette.black)
+        term.setTextColor(palette.white)
+        local text = read(opts.mask, nil, nil, opts.default)
+        if text == nil then text = "" end
+        if text == "" and opts.default then text = opts.default end
+        if text ~= "" or not opts.required then return text end
+        put(3, 9, opts.requiredMessage or "This cannot be empty.", palette.red, palette.black)
+        pause(1)
+    end
+end
+
+-- Guess of the best profile for this screen
+local function guessProfile()
+    if _G.pocket then return 2 end
+    local w, h = size()
+    if w < 40 or h < 14 then return 2 end
+    return 1
+end
+
+-- The whole "configure this computer" questionnaire of a fresh install, in
+-- the style of the language menu: profile, computer name, administrator,
+-- password, accent colour, summary. Returns the config table or false
+-- when the user cancels.
+function ui.configure(presets, t)
+    t = t or function(s) return s end
+    local profiles = {
+        { id = "classic", label = t("Classic computer") .. " - " .. t("desktop with windows") },
+        { id = "tablet", label = t("Tablet / mini PC") .. " - " .. t("small screens, touch") },
+        { id = "server", label = t("Server") .. " - " .. t("text console + services") },
+    }
+    local state = { profile = nil, hostname = nil, username = nil, password = "", preset = 1 }
+    local step = 1
+    while true do
+        if step == 1 then
+            local rows = {}
+            for i, p in ipairs(profiles) do rows[i] = { label = p.label } end
+            local idx = menu(t("Which kind of computer is this?"), t("The profile adapts the interface"), rows,
+                { start = guessProfile(), help = t("Up/Down + Enter") })
+            state.profile = profiles[idx].id
+            step = 2
+        elseif step == 2 then
+            local default = tostring(os.getComputerLabel() or "nyxos")
+            state.hostname = ui.input(t("Computer name"), t("Shown in the prompt and on the network"),
+                { default = default, label = t("Name") .. ": ", help = t("Enter = keep the suggestion") })
+            step = 3
+        elseif step == 3 then
+            state.username = ui.input(t("Administrator account"), t("The first user of this computer"),
+                { required = true, label = t("User") .. ": ", help = t("Type a user name, then Enter"),
+                  requiredMessage = t("A user name is required.") })
+            step = 4
+        elseif step == 4 then
+            local p1 = ui.input(t("Password"), t("Optional: leave empty for none"),
+                { mask = "*", label = t("Password") .. ": ", help = t("Enter = no password") })
+            if p1 ~= "" then
+                local p2 = ui.input(t("Password"), t("Type it again to confirm"),
+                    { mask = "*", label = t("Again") .. ": ", help = t("Same password, then Enter") })
+                if p2 ~= p1 then
+                    clear()
+                    center(5, t("The passwords do not match."), palette.red, palette.black)
+                    pause(1.2)
+                    step = 4
+                    p1 = nil
+                end
+            end
+            if p1 ~= nil then state.password = p1 step = 5 end
+        elseif step == 5 then
+            local rows = {}
+            for i, p in ipairs(presets) do rows[i] = { label = p.name } end
+            state.preset = menu(t("Accent colour"), t("Used by the desktop and the menus"), rows,
+                { start = state.preset, help = t("Up/Down + Enter") })
+            step = 6
+        else
+            local rows = {
+                { label = t("Install") },
+                { label = t("Change the answers") },
+                { label = t("Cancel"), fg = palette.red },
+            }
+            local profileName = state.profile
+            local idx = menu(t("Ready to install"),
+                state.username .. "@" .. state.hostname .. "  -  " .. profileName .. "  -  " .. presets[state.preset].name,
+                rows, { help = t("Up/Down + Enter") })
+            if idx == 1 then
+                local preset = presets[state.preset]
+                return {
+                    update = false, username = state.username, password = state.password,
+                    hostname = state.hostname, themeName = preset.name, accent = preset.accent,
+                    gui = state.profile ~= "server", profile = state.profile,
+                }
+            elseif idx == 2 then step = 1
+            else return false end
+        end
+    end
+end
+
 -- Which optional apps to install. Returns { id = bool }.
 function ui.chooseApps(dataDir, t)
     t = t or function(s) return s end

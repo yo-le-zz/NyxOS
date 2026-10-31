@@ -45,12 +45,19 @@ local function splitWords(line)
 end
 
 -- Expands $NAME and %NAME% references against the script's variables.
+local function envValue(name)
+    local ok, env = pcall(dofile, "/lib/env.lua")
+    if not ok then return nil end
+    local okG, v = pcall(env.get, name)
+    return okG and v or nil
+end
+
 local function expand(line, vars)
     line = line:gsub("%%([%w_]+)%%", function(name)
-        return vars[name] or ""
+        return vars[name] or envValue(name) or ""
     end)
     line = line:gsub("%$([%w_]+)", function(name)
-        return vars[name] or ""
+        return vars[name] or envValue(name) or ""
     end)
     return line
 end

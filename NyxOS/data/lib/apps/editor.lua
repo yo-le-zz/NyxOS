@@ -4,6 +4,7 @@ return {
     id = "editor",
     name = "Code Editor",
     multi = true,
+    profiles = { "classic" },
     icon = {
         palette = { k = "#1c1c2c", g = "gray", c = "cyan", o = "orange", l = "lime", w = "lightGray" },
         pixels = {
@@ -22,6 +23,7 @@ return {
         local t, palette, accent = ctx.t, ctx.palette, ctx.accent
         local aw, ah = area:getWidth(), area:getHeight()
         local state = { path = nil, dirty = false, saved = "" }
+        local history, histPos, lastSnap = { "" }, 1, ""
 
         local function updateTitle()
             local name = state.path or t("untitled")
@@ -37,21 +39,49 @@ return {
         local status = area:addLabel():setText(""):setPosition(1, ah):setSize(aw, 1)
             :setBackground(palette.gray):setForeground(palette.white)
 
-        -- syntax colouring (patterns are applied in order, the last one wins)
-        local function pat(p, color) box:addSyntaxPattern(p, color) end
-        for _, kw in ipairs({ "local", "function", "end", "if", "then", "else", "elseif",
-            "for", "while", "do", "repeat", "until", "return", "break", "in", "and", "or", "not" }) do
-            pat("%f[%w_]" .. kw .. "%f[^%w_]", palette.orange)
+        -- syntax colouring (patterns are applied in order, the last one wins);
+        -- the language follows the file extension (lua, nyx, py, c/h/cpp)
+        local LANGS = {
+            lua = { kw = { "local", "function", "end", "if", "then", "else", "elseif", "for", "while", "do",
+                "repeat", "until", "return", "break", "in", "and", "or", "not" },
+                const = { "true", "false", "nil" }, fn = { "print", "require" },
+                comment = "%-%-.*$", indent = { "then$", "do$", "else$", "repeat$", "function.*%)$", "{$" } },
+            py = { kw = { "def", "class", "if", "elif", "else", "for", "while", "return", "import", "from", "as",
+                "in", "not", "and", "or", "is", "try", "except", "finally", "with", "lambda", "pass", "break",
+                "continue", "yield", "raise", "global" },
+                const = { "None", "True", "False" }, fn = { "print", "len", "range", "input", "open" },
+                comment = "#.*$", indent = { ":$" } },
+            c = { kw = { "int", "char", "float", "double", "void", "if", "else", "for", "while", "do", "return",
+                "struct", "typedef", "enum", "switch", "case", "break", "continue", "static", "const", "unsigned",
+                "long", "short", "sizeof", "class", "public", "private" },
+                const = { "NULL", "true", "false" }, fn = { "printf", "malloc", "free", "main" },
+                comment = "//.*$", pre = "^%s*#%s*%w+", indent = { "{$" } },
+        }
+        LANGS.nyx = LANGS.lua
+        local lang = "lua"
+        local function setLang(name)
+            local def = LANGS[name] or LANGS.lua
+            lang = LANGS[name] and name or "lua"
+            box:clearSyntaxPatterns()
+            local function pat(p, color) box:addSyntaxPattern(p, color) end
+            for _, kw in ipairs(def.kw) do pat("%f[%w_]" .. kw .. "%f[^%w_]", palette.orange) end
+            for _, c in ipairs(def.const) do pat("%f[%w_]" .. c .. "%f[^%w_]", palette.purple) end
+            pat("%f[%w_]%d+%.?%d*", palette.cyan)
+            for _, f in ipairs(def.fn) do pat("%f[%w_]" .. f .. "%f[^%w_]", palette.lightBlue) end
+            if def.pre then pat(def.pre, palette.magenta) end
+            pat("\"[^\"]*\"", palette.lime)
+            pat("'[^']*'", palette.lime)
+            pat(def.comment, palette.lightGray)
         end
-        pat("%f[%w_]true%f[^%w_]", palette.purple)
-        pat("%f[%w_]false%f[^%w_]", palette.purple)
-        pat("%f[%w_]nil%f[^%w_]", palette.purple)
-        pat("%f[%w_]%d+%.?%d*", palette.cyan)
-        pat("%f[%w_]print%f[^%w_]", palette.lightBlue)
-        pat("%f[%w_]require%f[^%w_]", palette.lightBlue)
-        pat("\"[^\"]*\"", palette.lime)
-        pat("'[^']*'", palette.lime)
-        pat("%-%-.*$", palette.lightGray)
+        local function langFor(path)
+            local ext = tostring(path or ""):match("%.(%w+)$")
+            ext = ext and ext:lower()
+            if ext == "py" then return "py" end
+            if ext == "c" or ext == "h" or ext == "cpp" or ext == "hpp" or ext == "cc" then return "c" end
+            if ext == "nyx" then return "nyx" end
+            return "lua"
+        end
+        setLang("lua")
 
         local function lineCount()
             local ok, lines = pcall(function() return box:getLines() end)
@@ -118,6 +148,8 @@ return {
             box:setText(text)
             pcall(function() box:setCursorX(1); box:setCursorY(1); box:setScrollY(0) end)
             state.path, state.dirty, state.saved = path, false, box:getText()
+            setLang(langFor(path))
+            history, histPos, lastSnap = { box:getText() }, 1, box:getText()
             lastCount = -1
             updateTitle()
             syncGutter()
@@ -129,6 +161,7 @@ return {
             f.write(text)
             f.close()
             state.path, state.dirty, state.saved = path, false, text
+            setLang(langFor(path))
             updateTitle()
             return true
         end
@@ -171,6 +204,77 @@ return {
             end
         end
 
+        ---------------- undo / redo ----------------
+        local histBytes = 0
+        local function snapshot()
+            local text = box:getText()
+            if text == lastSnap then return end
+            while #history > histPos do table.remove(history) end
+            history[#history + 1] = text
+            histPos = #history
+            lastSnap = text
+            -- bounded memory: at most 200 states / ~300 KB
+            histBytes = histBytes + #text
+            while #history > 200 or (histBytes > 300000 and #history > 2) do
+                histBytes = histBytes - #history[1]
+                table.remove(history, 1)
+                histPos = histPos - 1
+            end
+        end
+        local function restore(i)
+            local text = history[i]
+            if not text then return end
+            local cx, cy = 1, 1
+            pcall(function() cx, cy = box:getCursorX(), box:getCursorY() end)
+            box:setText(text)
+            pcall(function() box:setCursorY(cy); box:setCursorX(cx) end)
+            histPos, lastSnap = i, text
+            lastCount = -1
+            refreshDirty()
+        end
+        local function undo() snapshot() if histPos > 1 then restore(histPos - 1) end end
+        local function redo() if histPos < #history then restore(histPos + 1) end end
+
+        ---------------- auto-indent ----------------
+        local function autoIndent()
+            local okL, lines = pcall(function() return box:getLines() end)
+            if not okL or not lines then return end
+            local cy = box:getCursorY()
+            local prev, cur = lines[cy - 1], lines[cy]
+            if not prev or (cur and cur:match("^%s")) then return end
+            local n = #(prev:match("^[ \t]*") or "")
+            local trimmed = prev:gsub("%s+$", "")
+            for _, p in ipairs(LANGS[lang].indent) do
+                if trimmed:match(p) then n = n + 2 break end
+            end
+            for _ = 1, n do os.queueEvent("char", " ") end
+        end
+
+        local ctrlDown = false
+        local function keyHook(key)
+            if key == keys.leftCtrl or key == keys.rightCtrl then ctrlDown = true return end
+            if not ctx.isActive() then return end
+            if ctrlDown and key == keys.z then undo()
+            elseif ctrlDown and key == keys.y then redo()
+            elseif ctrlDown and key == keys.s then save() end
+        end
+        local function keyUpHook(key)
+            if key == keys.leftCtrl or key == keys.rightCtrl then ctrlDown = false end
+        end
+        ctx.basalt.onEvent("key", keyHook)
+        ctx.basalt.onEvent("key_up", keyUpHook)
+        ctx.onClose(function()
+            ctx.basalt.removeEvent("key", keyHook)
+            ctx.basalt.removeEvent("key_up", keyUpHook)
+        end)
+        pcall(function()
+            box:onKey(function(self, key)
+                if key == keys.enter or key == keys.numPadEnter then
+                    ctx.basalt.schedule(function() sleep(0.05) pcall(autoIndent) end)
+                end
+            end)
+        end)
+
         local function toolbar(x, bw, text, bg, fn)
             area:addButton():setText(text):setPosition(x, 1):setSize(bw, 1)
                 :setBackground(bg):setForeground(palette.black):onClick(fn)
@@ -198,6 +302,9 @@ return {
                 else ctx.message(t("Run"), t("Only .lua and .nyx files can be run.")) end
             end)
         end)
+
+        x = toolbar(x, 3, "<", palette.lightGray, undo)
+        x = toolbar(x, 3, ">", palette.lightGray, redo)
 
         -- Folder sidebar: "Folder" picks a directory, its files are listed on the
         -- left, a click opens a file (asking before discarding changes).
@@ -302,6 +409,8 @@ return {
             box:setText(r.text or "")
             state.path, state.saved = r.path, r.saved or ""
             state.dirty = box:getText() ~= state.saved
+            setLang(langFor(r.path))
+            history, histPos, lastSnap = { box:getText() }, 1, box:getText()
             pcall(function() box:setCursorX(r.cx or 1); box:setCursorY(r.cy or 1) end)
             updateTitle()
         elseif type(arg) == "string" and fs.exists(arg) and not fs.isDir(arg) then loadFile(arg) end
@@ -329,6 +438,7 @@ return {
                 if not ctx.alive() then return end
                 syncGutter()
                 refreshDirty()
+                snapshot()
             end
         end)
         ctx.basalt.schedule(function()

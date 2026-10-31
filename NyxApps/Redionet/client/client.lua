@@ -4,7 +4,10 @@
 ]]
 
 peripheral.find("modem", rednet.open)
-if not rednet.isOpen() then error("Failed to establish rednet connection. Attach a modem to continue.", 0) end
+if not rednet.isOpen() then
+    printError("RedioNet: no modem found. Attach a (wireless/ender) modem and run `redionet` again.")
+    return
+end
 
 SERVER_ID = nil     -- set in setup_server_connection
 
@@ -65,6 +68,8 @@ local function setup_server_connection()
     write('Waiting for server connection... ')
     local id, server_settings
 
+    -- gives up after ~20 s (the old loop waited forever and looked frozen)
+    local deadline = os.epoch("utc") + 20000
     parallel.waitForAny(ui.loading_animation(), function ()
         local payload, code
         repeat
@@ -76,10 +81,13 @@ local function setup_server_connection()
                 if payload then
                     code, server_settings = table.unpack(payload)
                 end
+            else
+                sleep(0.5)
             end
-        until code == "CONFIG"
+        until code == "CONFIG" or os.epoch("utc") > deadline
     end)
 
+    if not server_settings then return nil end
     SERVER_ID = id
 
     return server_settings
@@ -88,6 +96,13 @@ end
 if speaker then rednet.host('PROTO_AUDIO', HOST_NAME) else warn_speaker() end
 -- check speaker before connect to server to extend time warning visible
 local server_settings = setup_server_connection()
+if not server_settings then
+    print()
+    printError("RedioNet: no server found on this network.")
+    print("Start the server (service start redionet) on a computer with a modem,")
+    print("check that both use the same modem type/range, then run `redionet` again.")
+    return
+end
 
 
 settings.load()
@@ -206,6 +221,6 @@ parallel.waitForAny(
     receiver.receive_loop
 )
 
-if     on_exit == 'reload' then shell.run('client')
+if     on_exit == 'reload' then shell.run(shell.getRunningProgram())
 elseif on_exit == 'reboot' then os.reboot()
 end

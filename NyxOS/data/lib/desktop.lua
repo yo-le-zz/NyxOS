@@ -79,6 +79,8 @@ local function runOnce()
     local nyxlib = dofile("/lib/nyxlib.lua")
     local config = nyxlib.loadTable("/etc/nyx-config.lua")
     local desktopBg = colorByName(config.desktopBg, palette.black)
+    local profileLib = dofile("/lib/profile.lua")
+    local tablet = profileLib.isTablet()
     local home, username = homeDir()
     local request = nil
 
@@ -139,7 +141,7 @@ local function runOnce()
         -- Update notice (checked in the background, see /lib/updater.lua)
         local updateInfo = nil
         local updateButton = taskbar:addButton()
-            :setText(" Update! "):setPosition(w - 30, 1):setSize(9, 1)
+            :setText(" Update! "):setPosition((tablet and w < 40) and 10 or (w - 30), 1):setSize(9, 1)
             :setBackground(palette.orange):setForeground(palette.black)
         updateButton:setVisible(false)
         updateButton:onClick(function()
@@ -261,6 +263,133 @@ local function runOnce()
             openDialog({ title = title, text = text, ok = "Yes", cancel = "No", onOk = onYes })
         end
 
+        -- Task runner: runs a command in a box (no terminal): its output is
+        -- shown live at the end, questions it asks (y/n, variant, password)
+        -- appear as an answer field and WAIT for the user.
+        local function runTask(title, cmd, onDone)
+            closeDialog()
+            sweep()
+            local dw, dh = math.min(w - 2, 48), math.min(h - 2, 16)
+            local dx, dy = math.floor((w - dw) / 2) + 1, math.max(1, math.floor((h - dh) / 2))
+            local d = main:addFrame():setPosition(dx, dy):setSize(dw, dh):setBackground(palette.gray):setZ(900)
+            currentDialog = d
+            d:addLabel():setText(center(t(title), dw)):setPosition(1, 1):setSize(dw, 1)
+                :setBackground(accent):setForeground(palette.black)
+            local box = d:addTextBox():setPosition(2, 3):setSize(dw - 2, dh - 6)
+                :setEditable(false):setBackground(palette.black):setForeground(palette.white)
+            local status = d:addLabel():setText(t("Working...")):setPosition(2, dh - 2):setSize(dw - 2, 1)
+                :setBackground(palette.gray):setForeground(palette.lightGray)
+            local answer = d:addInput():setPosition(2, dh - 1):setSize(dw - 14, 1)
+                :setBackground(palette.black):setForeground(palette.white)
+            local okBtn = d:addButton():setText(" " .. t("OK") .. " "):setPosition(dw - 11, dh - 1):setSize(6, 1)
+                :setBackground(accent):setForeground(palette.black)
+            local closeBtn = d:addButton():setText(" " .. t("Close") .. " "):setPosition(dw - 6, dh - 1):setSize(6, 1)
+                :setBackground(palette.lightGray):setForeground(palette.black)
+            answer:setVisible(false) okBtn:setVisible(false)
+            local running, waiting, armedAt = true, false, 0
+            local function submitAnswer()
+                if not waiting or os.epoch("utc") < armedAt then return end
+                local text = answer:getText()
+                answer:setText("")
+                os.queueEvent("nyx_task_answer", text)
+            end
+            okBtn:onClick(submitAnswer)
+            answer:onKey(function(self, key, held)
+                if (key == keys.enter or key == keys.numPadEnter) and not held then submitAnswer() end
+            end)
+            closeBtn:onClick(function()
+                if running then return end
+                closeDialog()
+                if onDone then onDone() end
+            end)
+            local function show(text)
+                box:setText(text)
+                pcall(function()
+                    local lines = box:getLines()
+                    box:setScrollY(math.max(0, #lines - (dh - 6)))
+                end)
+            end
+            local ui = {
+                prompt = function(soFar, mask)
+                    show(soFar)
+                    status:setText(t("Answer below, then press OK"))
+                    pcall(function() answer:setReplaceChar(mask or "") end)
+                    answer:setText("") answer:setVisible(true) okBtn:setVisible(true)
+                    waiting, armedAt = true, os.epoch("utc") + 600
+                    sleep(0.1)
+                    pcall(function() answer:setFocused(true) end)
+                    local _, text = os.pullEvent("nyx_task_answer")
+                    waiting = false
+                    answer:setVisible(false) okBtn:setVisible(false)
+                    status:setText(t("Working..."))
+                    return text
+                end,
+            }
+            basalt.schedule(function()
+                local capture = dofile("/lib/capture.lua")
+                local okRun, out, err = pcall(capture.run, cmd, ui)
+                if not okRun then out, err = "", tostring(out) end
+                running = false
+                local text = out or ""
+                if err then text = text .. "\nError: " .. tostring(err) end
+                show(text)
+                status:setText(err and t("Failed.") or t("Done."))
+            end)
+            return d
+        end
+
+        -- Runs `action` once the user has administrator rights (asks for the
+        -- password in a dialog when needed).
+        local function needAdmin(action)
+            local okP, permissions = pcall(dofile, "/lib/permissions.lua")
+            local session = nyxlib.loadSession()
+            local me = session and session.username
+            if not okP or not me or permissions.isPrivileged(me) then
+                action()
+                return
+            end
+            openDialog({ title = "Administrator password", text = "Password of " .. me .. ":",
+                input = "", mask = true, ok = "OK", onOk = function(pass)
+                    local okU, users = pcall(dofile, "/lib/users.lua")
+                    if okU and users.checkPassword(me, tostring(pass)) then
+                        permissions.grantSudo(me)
+                        action()
+                    else
+                        message("Error", t("Wrong password."))
+                    end
+                end })
+        end
+
+        -- Installs a registry package: asks client / server (when both exist),
+        -- then administrator rights, then runs apt in the task box.
+        local function installPackage(name, types, onDone)
+            local function go(variant)
+                needAdmin(function()
+                    runTask(t("Installing %s", name), "apt install " .. name .. (variant and (" " .. variant) or ""), onDone)
+                end)
+            end
+            local list = types or {}
+            if #list <= 1 then go(list[1]) return end
+            local dw = 36
+            local dx, dy = math.floor((w - dw) / 2) + 1, math.floor((h - 7) / 2)
+            closeDialog() sweep()
+            local d = main:addFrame():setPosition(dx, math.max(1, dy)):setSize(dw, 7):setBackground(palette.gray):setZ(900)
+            currentDialog = d
+            d:addLabel():setText(center(t("Install %s", name), dw)):setPosition(1, 1):setSize(dw, 1)
+                :setBackground(accent):setForeground(palette.black)
+            d:addLabel():setText(t("Which version?")):setPosition(2, 3):setForeground(palette.white)
+            local x = 2
+            for _, v in ipairs(list) do
+                local label = " " .. t(v:sub(1, 1):upper() .. v:sub(2)) .. " "
+                d:addButton():setText(label):setPosition(x, 5):setSize(#label, 1)
+                    :setBackground(v == "client" and palette.green or palette.orange):setForeground(palette.black)
+                    :onClick(function() closeDialog() go(v) end)
+                x = x + #label + 1
+            end
+            d:addButton():setText(" " .. t("Cancel") .. " "):setPosition(x, 5):setSize(#t("Cancel") + 2, 1)
+                :setBackground(palette.lightGray):setForeground(palette.black):onClick(closeDialog)
+        end
+
         -- entries = { { "Label", function } ... } at x, y
         local currentMenu = nil
         local function closeMenu()
@@ -311,7 +440,18 @@ local function runOnce()
         local activeWin = nil
         local cascade = 0
         local drag = nil
-        local carry = nil
+        local carry, carryAt = nil, 0
+        local hintLabel = taskbar:addLabel():setText(""):setPosition(1, 1):setSize(w, 1)
+            :setBackground(accent):setForeground(palette.black):setZ(100)
+        hintLabel:setVisible(false)
+        local function setHint(text)
+            if text then
+                hintLabel:setText((" " .. text .. string.rep(" ", w)):sub(1, w))
+                hintLabel:setVisible(true)
+            else
+                hintLabel:setVisible(false)
+            end
+        end
         local lastTitleClick = { win = nil, at = 0 }
         local taskButtons = {}
         local MAX_TASK = 6
@@ -320,6 +460,7 @@ local function runOnce()
             local first = 10
             local avail = w - 32 - first
             local n = math.min(#windows, MAX_TASK)
+            if tablet and w < 40 then n = 0 end   -- narrow: windows are listed in the Start menu
             local bw = n > 0 and math.max(5, math.min(14, math.floor(avail / n))) or 0
             for i = 1, MAX_TASK do
                 local b = taskButtons[i]
@@ -342,8 +483,9 @@ local function runOnce()
             local active = (win == activeWin)
             pcall(function()
                 win.bar:setBackground(active and accent or palette.lightGray)
-                local bt = (" " .. win.title):sub(1, win.fw - 13)
-                win.bar:setText(bt .. string.rep(" ", math.max(0, win.fw - 12 - #bt)))
+                local barW = win.barW or (win.fw - 12)
+                local bt = (" " .. win.title):sub(1, barW - 1)
+                win.bar:setText(bt .. string.rep(" ", math.max(0, barW - #bt)))
             end)
         end
 
@@ -448,6 +590,7 @@ local function runOnce()
             closeMenu()
             sweep()
 
+            if tablet and opts.maximized == nil then opts.maximized = true end
             local bw, bh = appSize(app, opts.maximized)
             local fw, fh = bw, bh + 1
             local x, y = 1, 1
@@ -463,14 +606,15 @@ local function runOnce()
 
             local frame = content:addFrame():setPosition(x, y):setSize(fw, fh)
                 :setBackground(palette.gray):setZ(zTop + 1)
-            local bar = frame:addButton():setText(""):setPosition(1, 1):setSize(fw - 12, 1)
+            local barW = tablet and (fw - 6) or (fw - 12)
+            local bar = frame:addButton():setText(""):setPosition(1, 1):setSize(barW, 1)
                 :setBackground(palette.lightGray):setForeground(palette.black)
             local body = frame:addFrame():setPosition(1, 2):setSize(bw, bh):setBackground(desktopBg)
 
             local win = {
                 app = app, arg = arg, frame = frame, bar = bar, body = body,
                 x = x, y = y, fw = fw, fh = fh, bw = bw, bh = bh,
-                title = t(app.name), maximized = opts.maximized and true or false,
+                title = t(app.name), maximized = opts.maximized and true or false, barW = barW, noMax = tablet or nil,
                 minimized = false, closed = false,
             }
             table.insert(windows, win)
@@ -479,26 +623,34 @@ local function runOnce()
                 frame:addButton():setText(text):setPosition(fw - offset, 1):setSize(3, 1)
                     :setBackground(bg):setForeground(fg):onClick(fn)
             end
-            titleButton(11, " + ", palette.cyan, palette.black, function()
-                focusWindow(win)
-                carry = win
-            end)
-            titleButton(8, " _ ", palette.yellow, palette.black, function() minimizeWindow(win) end)
-            titleButton(5, win.maximized and " o " or " O ", palette.lime, palette.black, function()
-                local saved = win.saver and win.saver() or nil
-                local wasMax = win.maximized
-                local ox, oy = win.x, win.y
-                closeWindow(win, true)
-                local newWin = openWindow(app, arg, {
-                    maximized = not wasMax, force = true, restore = saved,
-                    x = wasMax and (win.restoreX or ox) or nil, y = wasMax and (win.restoreY or oy) or nil,
-                })
-                if newWin and not wasMax then newWin.restoreX, newWin.restoreY = ox, oy end
-            end)
-            titleButton(2, " X ", palette.red, palette.white, function() closeWindow(win) end)
+            if tablet then
+                titleButton(5, " _ ", palette.yellow, palette.black, function() minimizeWindow(win) end)
+                titleButton(2, " X ", palette.red, palette.white, function() closeWindow(win) end)
+            else
+                titleButton(11, " + ", palette.cyan, palette.black, function()
+                    focusWindow(win)
+                    carry, carryAt = win, os.epoch("utc")
+                    setHint(t("Click where the window goes (arrows move it, Enter = ok, Esc = cancel)"))
+                end)
+                titleButton(8, " _ ", palette.yellow, palette.black, function() minimizeWindow(win) end)
+                titleButton(5, win.maximized and " o " or " O ", palette.lime, palette.black, function()
+                    local saved = win.saver and win.saver() or nil
+                    local wasMax = win.maximized
+                    local ox, oy = win.x, win.y
+                    closeWindow(win, true)
+                    local newWin = openWindow(app, arg, {
+                        maximized = not wasMax, force = true, restore = saved,
+                        x = wasMax and (win.restoreX or ox) or nil, y = wasMax and (win.restoreY or oy) or nil,
+                    })
+                    if newWin and not wasMax then newWin.restoreX, newWin.restoreY = ox, oy end
+                end)
+                titleButton(2, " X ", palette.red, palette.white, function() closeWindow(win) end)
+            end
 
             bar:onClick(function(self, btn, rx)
+                local wasActive = (activeWin == win)
                 focusWindow(win)
+                if tablet then return end
                 local now = os.epoch("utc")
                 if lastTitleClick.win == win and now - lastTitleClick.at < 500 and not win.noMax then
                     lastTitleClick = { win = nil, at = 0 }
@@ -516,7 +668,7 @@ local function runOnce()
                     return
                 end
                 lastTitleClick = { win = win, at = now }
-                drag = { kind = "win", win = win, grab = rx, moved = false }
+                drag = { kind = "win", win = win, grab = rx, moved = false, wasActive = wasActive }
             end)
 
             -- per-window API handed to the app
@@ -582,8 +734,10 @@ local function runOnce()
         -- is being carried ("+" button) where the next click lands.
         basalt.onEvent("mouse_click", function(btn, x, y)
             if carry then
+                if os.epoch("utc") - carryAt < 350 then return end
                 local win = carry
                 carry = nil
+                setHint(nil)
                 if not win.closed and not win.maximized then
                     local nx = math.max(1, math.min(w - 3, x - 1))
                     local ny = math.max(1, math.min(h - 2, y))
@@ -595,6 +749,23 @@ local function runOnce()
             if y >= 1 and y <= h - 1 then
                 local win = topWindowAt(x, y)
                 if win and win ~= activeWin then focusWindow(win) end
+            end
+        end)
+
+        -- keyboard: while a window is being placed, arrows nudge it
+        basalt.onEvent("key", function(key)
+            if not carry then return end
+            local win = carry
+            if win.closed then carry = nil setHint(nil) return end
+            local dx, dy = 0, 0
+            if key == keys.left then dx = -1 elseif key == keys.right then dx = 1
+            elseif key == keys.up then dy = -1 elseif key == keys.down then dy = 1
+            elseif key == keys.enter or key == keys.numPadEnter then carry = nil setHint(nil) return
+            elseif key == keys.backspace or key == keys.escape or key == keys.tab then carry = nil setHint(nil) return end
+            if dx ~= 0 or dy ~= 0 then
+                win.x = math.max(1 - (win.fw - 6), math.min(w - 3, win.x + dx * 2))
+                win.y = math.max(1, math.min(h - 2, win.y + dy))
+                win.frame:setPosition(win.x, win.y)
             end
         end)
 
@@ -701,6 +872,7 @@ local function runOnce()
             t = t, home = home, username = username, config = config,
             center = center, trim = trim, validName = validName,
             dialog = openDialog, message = message, confirm = confirm,
+            runTask = runTask, needAdmin = needAdmin, installPackage = installPackage,
             pickFile = pickFile, openTerminal = openTerminal, runOnTerminal = runOnTerminal,
             launch = launchApp, restart = restart,
             windows = function() return windows end,
@@ -745,7 +917,7 @@ local function runOnce()
         end)
         for _, mod in ipairs(appModules) do
             local on = mod.system or type(config.apps) ~= "table" or config.apps[mod.id] ~= false
-            if on then table.insert(apps, mod) end
+            if on and profileLib.appAllowed(mod) then table.insert(apps, mod) end
         end
 
         ------------------------------------------------------------
@@ -797,7 +969,7 @@ local function runOnce()
                         or (type(entry.icon) == "table" and (entry.icon.color or entry.icon.art) and entry.icon)
                         or iconlib.builtin.package,
                     open = function()
-                        if cmd then runOnTerminal(cmd) else openTerminal("service start " .. tostring(entry.service)) end
+                        if cmd then runOnTerminal(cmd) else needAdmin(function() runTask(t("Service"), "service start " .. tostring(entry.service)) end) end
                     end,
                 })
             end
@@ -884,7 +1056,7 @@ local function runOnce()
                 end)
             elseif it.kind == "pkg" then
                 confirm("Uninstall", t("Uninstall %s ?", it.package), function()
-                    openTerminal("apt remove " .. it.package)
+                    needAdmin(function() runTask(t("Removing %s", it.package), "apt remove " .. it.package, function() showDesktop() end) end)
                 end)
             else
                 message("Info", t("%s is a system app.", it.name))
@@ -1145,6 +1317,12 @@ local function runOnce()
             if not drag then return end
             local d = drag
             drag = nil
+            -- a plain click on the title of the active window: "place" mode
+            if d.kind == "win" and not d.moved and d.wasActive and not d.win.closed and not d.win.maximized then
+                carry, carryAt = d.win, os.epoch("utc")
+                setHint(t("Click where the window goes (arrows move it, Enter = ok, Esc = cancel)"))
+                return
+            end
             if d.kind ~= "icon" or not d.moved then return end
             local f = d.item.frame
             -- nearest grid cell to the icon's centre
@@ -1157,7 +1335,7 @@ local function runOnce()
         ------------------------------------------------------------
         -- Taskbar: page switcher + Start menu
         ------------------------------------------------------------
-        pageLabel = taskbar:addLabel():setText(""):setForeground(palette.white):setPosition(w - 20, 1):setSize(8, 1)
+        pageLabel = taskbar:addLabel():setText(""):setForeground(palette.white):setPosition(tablet and w < 40 and (w - 17) or (w - 20), 1):setSize(8, 1)
         pageLabel:onClick(function(self, btn, rx)
             if pages > 1 then
                 if rx <= 3 then page = page - 1 else page = page + 1 end
@@ -1175,6 +1353,12 @@ local function runOnce()
             if startMenu then closeStart() return end
             closeMenu()
             local entries = { { "Desktop", function() showDesktop() end } }
+            if tablet and w < 40 then
+                for _, win in ipairs(windows) do
+                    local target = win
+                    table.insert(entries, { "> " .. tostring(win.title):sub(1, 14), function() focusWindow(target) end })
+                end
+            end
             for _, a in ipairs(apps) do
                 table.insert(entries, { a.name, function() launchApp(a.name) end })
             end
@@ -1182,16 +1366,22 @@ local function runOnce()
             table.insert(entries, { "Exit to shell", function() runOnTerminal("shell") end })
             table.insert(entries, { "Reboot", function() runOnTerminal("reboot") end })
             table.insert(entries, { "Shutdown", function() runOnTerminal("shutdown") end })
-            local colW = 18
+            local colW = tablet and math.min(w, 24) or 18
             local maxRows = math.max(3, h - 2)
             local ncols = math.max(1, math.ceil(#entries / maxRows))
+            if tablet and w < 40 then colW = math.floor(w / ncols) end
             local mh = math.ceil(#entries / ncols)
+            -- touch screens: taller rows when they fit
+            local spacing = (tablet and ncols == 1 and mh * 2 - 1 <= maxRows) and 2 or 1
+            local rowsUsed = mh
+            if spacing == 2 then mh = mh * 2 - 1 end
             local mw = colW * ncols
             local menu = main:addFrame():setSize(mw, mh):setPosition(1, h - mh):setBackground(palette.gray):setZ(950)
             menu.menuW, menu.menuH = mw, mh
             for i = 1, #entries do
                 local e = entries[i]
-                local col, row = math.floor((i - 1) / mh), (i - 1) % mh + 1
+                local col, row = math.floor((i - 1) / rowsUsed), (i - 1) % rowsUsed + 1
+                if spacing == 2 then row = (row - 1) * 2 + 1 end
                 local bg, fg = palette.gray, palette.white
                 if i == 1 then bg, fg = accent, palette.black end
                 if e[1] == "Reboot" then bg, fg = palette.orange, palette.black end

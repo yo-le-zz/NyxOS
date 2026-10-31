@@ -80,6 +80,12 @@ end
 -- drawing while a long command waits is not painted into the buffer.
 -- Call this from a coroutine that may yield (basalt.schedule(...)).
 function capture.run(cmd, ui)
+    -- $VAR / ${VAR} / ~ (see /lib/env.lua)
+    local okEnv, env = pcall(dofile, "/lib/env.lua")
+    if okEnv and type(env) == "table" then
+        local okX, expanded = pcall(env.expand, cmd)
+        if okX and type(expanded) == "string" then cmd = expanded end
+    end
     local parent = term.current()
     local width = parent.getSize()
 

@@ -17,10 +17,10 @@ local res = {}
 
 local KB, MB = 1024, 1024 * 1024
 local TIERS = {
-    tiny   = { logMax = 40 * KB,  logView = 200,  shellLines = 300,  history = 30,  autosave = 30, treeCache = false, keepOldLog = false },
-    small  = { logMax = 128 * KB, logView = 500,  shellLines = 600,  history = 60,  autosave = 20, treeCache = true,  keepOldLog = true },
-    medium = { logMax = 512 * KB, logView = 1500, shellLines = 1500, history = 150, autosave = 15, treeCache = true,  keepOldLog = true },
-    large  = { logMax = 2 * MB,   logView = 4000, shellLines = 4000, history = 500, autosave = 10, treeCache = true,  keepOldLog = true },
+    tiny   = { logMax = 40 * KB,  logView = 200,  shellLines = 300,  history = 30,  autosave = 30, vmPages = 4, treeCache = false, keepOldLog = false },
+    small  = { logMax = 128 * KB, logView = 500,  shellLines = 600,  history = 60,  autosave = 20, vmPages = 8, treeCache = true,  keepOldLog = true },
+    medium = { logMax = 512 * KB, logView = 1500, shellLines = 1500, history = 150, autosave = 15, vmPages = 16, treeCache = true,  keepOldLog = true },
+    large  = { logMax = 2 * MB,   logView = 4000, shellLines = 4000, history = 500, autosave = 10, vmPages = 32, treeCache = true,  keepOldLog = true },
 }
 
 local cache = nil
