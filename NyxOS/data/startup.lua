@@ -185,6 +185,17 @@ local function runInteractiveShell()
         return
     end
 
+    if uiMode == "text" then
+        -- Turtle profile: plain text shell + the turtle toolkit banner.
+        term.setBackgroundColor(colors.black)
+        term.setTextColor(colors.white)
+        term.clear()
+        term.setCursorPos(1, 1)
+        print("NyxOS turtle - try: tstatus, tunnel, quarry, refuel, tsort")
+        shell.run("shell")
+        return
+    end
+
     if uiMode == "desktop" then
         local desktopOk, desktop = pcall(dofile, "/lib/desktop.lua")
         if desktopOk and desktop then

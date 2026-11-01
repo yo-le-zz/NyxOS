@@ -1,6 +1,6 @@
 # 🚀 NyxOS
 
-> ⚠️ **Current version: 1.9.0**
+> ⚠️ **Current version: 2.0.0**
 >
 > Adds a graphical desktop, boot.json + disk installs (chainloaded via
 > the separate [NyxLoader](https://github.com/yo-le-zz/NyxLoader) project),
@@ -354,6 +354,10 @@ Three profiles, chosen in the installer or with `profile classic|tablet|server` 
 - **Server** -- no desktop, a text dashboard (`serverui`) for services, logs, network, shell, reboot and shutdown.
 
 Desktop (GUI) mode is the default. Windows are moved with the "place" mode: click the title bar, move with the mouse or arrow keys, click to drop.
+
+### Turtles (2.0.0)
+
+On a turtle the `turtle` profile is used: text shell and the turtle toolkit (`tstatus`, `tset x y z`, `tgo`, `refuel`, `tsort`, `tunnel`, `quarry`, `tfarm`). Position is saved across reboots (set it once with `tset` or `tset gps`). `tunnel` and `quarry` unload into a chest placed behind the start point and stop when the fuel is too low to come back.
 
 ## 🛡️ Security
 

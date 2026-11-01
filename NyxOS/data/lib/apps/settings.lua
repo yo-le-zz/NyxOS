@@ -78,7 +78,7 @@ return {
         gp:addLabel():setText(t("tablet: small screens, full-screen apps"):sub(1, cw)):setForeground(palette.lightGray):setPosition(1, 8)
         gp:addLabel():setText(t("server: text console + services"):sub(1, cw)):setForeground(palette.lightGray):setPosition(1, 9)
         local mx = 1
-        for _, m in ipairs({ "classic", "tablet", "server" }) do
+        for _, m in ipairs({ "classic", "tablet", "server", "turtle" }) do
             gp:addButton():setText(" " .. m .. " "):setPosition(mx, 10):setSize(#m + 2, 1)
                 :setBackground(palette.lightGray):setForeground(palette.black)
                 :onClick(function() mode = m; setModeLabel() end)

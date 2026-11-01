@@ -6,7 +6,7 @@
 -- installed/broken, a Recovery option repairs system files without
 -- touching your data (see also the standalone `recovery` command).
 
-local VERSION = "1.9.0"
+local VERSION = "2.0.0"
 local palette = colors or colours
 
 ------------------------------------------------------------------
@@ -441,7 +441,7 @@ local function applyConfig(config, root)
 
         nyxlib.setHostname(config.hostname)
         theme.save({ name = config.themeName, accent = config.accent })
-        nyxlib.saveTable("/etc/nyx-config.lua", { gui = config.gui ~= false, lang = config.lang or "en", apps = config.apps, profile = config.profile or "classic", uiMode = (config.profile == "server") and "server" or "desktop" })
+        nyxlib.saveTable("/etc/nyx-config.lua", { gui = config.gui ~= false, lang = config.lang or "en", apps = config.apps, profile = config.profile or "classic", uiMode = (config.profile == "server") and "server" or (config.profile == "turtle") and "text" or "desktop" })
 
         if users.count() == 0 then
             local ok, err = users.add(config.username, config.password, true)
@@ -465,7 +465,7 @@ local function applyConfig(config, root)
     f.close()
 
     nyxlib.saveTable(fs.combine(root, "etc/nyx-theme.lua"), { name = config.themeName, accent = config.accent })
-    nyxlib.saveTable(fs.combine(root, "etc/nyx-config.lua"), { gui = config.gui ~= false, lang = config.lang or "en", apps = config.apps, profile = config.profile or "classic", uiMode = (config.profile == "server") and "server" or "desktop" })
+    nyxlib.saveTable(fs.combine(root, "etc/nyx-config.lua"), { gui = config.gui ~= false, lang = config.lang or "en", apps = config.apps, profile = config.profile or "classic", uiMode = (config.profile == "server") and "server" or (config.profile == "turtle") and "text" or "desktop" })
 
     local home = "home/" .. config.username
     ensureDir(fs.combine(root, home))

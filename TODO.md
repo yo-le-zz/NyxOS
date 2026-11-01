@@ -123,17 +123,17 @@ Chaque version fait l'objet d'un zip livré séparément.
 
 ---
 
-## Turtles (roadmap long terme, tout à la fin)
-- [ ] Profil « Turtle » : détection `turtle`, UI texte minimale, démarrage automatique d'un job
+## Turtles (roadmap long terme, tout à la fin) — 2.0.0 : base livrée
+- [x] Profil « Turtle » : détection `turtle`, UI texte minimale, démarrage automatique d'un job
 - [ ] Gestionnaire de flotte : liste/état/carburant/position de toutes les turtles (modem/Redionet)
 - [ ] Contrôle à distance : console, déplacement manuel, caméra d'inventaire
 - [ ] GPS : hôte GPS, calibration, `gps locate`, cartes de positions
 - [ ] Pathfinding A* avec carte du monde partagée et évitement de collision entre turtles
-- [ ] Programmes de minage : tunnel, branche, chambre, veine, mine en carrière (quarry)
-- [ ] Programmes de ferme : blé, arbres, canne, élevage, ferme à mobs
+- [x] Programmes de minage : tunnel, branche, chambre, veine, mine en carrière (quarry)
+- [x] Programmes de ferme : blé, arbres, canne, élevage, ferme à mobs
 - [ ] Construction : plans (`.nfp`/schéma), murs, sols, bâtiments, copie de zone
-- [ ] Gestion d'inventaire : tri, coffre-dépôt automatique, déchargement, recharge de carburant
-- [ ] Gestion du carburant : retour automatique à la base, estimation de trajet
+- [x] Gestion d'inventaire : tri, coffre-dépôt automatique, déchargement, recharge de carburant
+- [x] Gestion du carburant : retour automatique à la base, estimation de trajet
 - [ ] Planificateur de tâches (file de jobs, priorités, reprise après redémarrage)
 - [ ] Éditeur de jobs visuel et scripts `.nyx` dédiés turtle
 - [ ] Packages `apt` « turtle » (variantes client turtle / serveur de flotte)

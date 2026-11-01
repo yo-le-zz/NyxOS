@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0
+
+### Added (turtles, part 1)
+- **Turtle profile** (auto-detected on a turtle): text shell, no desktop.
+- `lib/turtlekit.lua`: saved position/direction, safe moves with digging, fuel handling, `goto`/`goHome`, inventory sort/dump, unload at home.
+- Commands: `tstatus`, `tset`, `tgo`, `refuel`, `tsort`, `tunnel`, `quarry`, `tfarm`.
+- Test `tests/t_turtle.lua` (fake turtle in a block grid).
+
+### Fixed
+- `tonumber(select(n, ...))` pitfalls (extra values were taken as a base).
+
 ## 1.9.0
 
 ### Added

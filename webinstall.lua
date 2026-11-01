@@ -7,7 +7,7 @@
 -- boot.json is NOT downloaded: install.lua generates it on the target
 -- itself (writeBootJson), so there is no such file in the repository.
 
-local VERSION = "1.9.0"
+local VERSION = "2.0.0"
 -- Optional arguments: webinstall [owner/name [branch-or-tag]]  (used by nyxupdate)
 local args = { ... }
 local repo = (args[1] and args[1]:match("^[%w%-%._]+/[%w%-%._]+$")) or "yo-le-zz/NyxOS"
@@ -71,8 +71,10 @@ local FILES = {
     "data/bin/profile.lua",
     "data/bin/ps.lua",
     "data/bin/pwd.lua",
+    "data/bin/quarry.lua",
     "data/bin/reboot.lua",
     "data/bin/recovery.lua",
+    "data/bin/refuel.lua",
     "data/bin/renice.lua",
     "data/bin/reset.lua",
     "data/bin/resources.lua",
@@ -85,9 +87,15 @@ local FILES = {
     "data/bin/sudo.lua",
     "data/bin/tail.lua",
     "data/bin/testbasalt.lua",
+    "data/bin/tfarm.lua",
+    "data/bin/tgo.lua",
     "data/bin/top.lua",
     "data/bin/touch.lua",
     "data/bin/tree.lua",
+    "data/bin/tset.lua",
+    "data/bin/tsort.lua",
+    "data/bin/tstatus.lua",
+    "data/bin/tunnel.lua",
     "data/bin/uname.lua",
     "data/bin/uninstall.lua",
     "data/bin/unset.lua",
@@ -165,6 +173,7 @@ local FILES = {
     "data/lib/theme.lua",
     "data/lib/tmp.lua",
     "data/lib/toolkit.lua",
+    "data/lib/turtlekit.lua",
     "data/lib/updater.lua",
     "data/lib/users.lua",
     "data/lib/vm.lua",

@@ -271,6 +271,7 @@ function ui.configure(presets, t)
     local profiles = {
         { id = "classic", label = t("Classic computer") .. " - " .. t("desktop with windows") },
         { id = "tablet", label = t("Tablet / mini PC") .. " - " .. t("small screens, touch") },
+        { id = "turtle", label = "Turtle - " .. t("text shell + turtle toolkit") },
         { id = "server", label = t("Server") .. " - " .. t("text console + services") },
     }
     local state = { profile = nil, hostname = nil, username = nil, password = "", preset = 1 }
@@ -329,7 +330,7 @@ function ui.configure(presets, t)
                 return {
                     update = false, username = state.username, password = state.password,
                     hostname = state.hostname, themeName = preset.name, accent = preset.accent,
-                    gui = state.profile ~= "server", profile = state.profile,
+                    gui = state.profile ~= "server" and state.profile ~= "turtle", profile = state.profile,
                 }
             elseif idx == 2 then step = 1
             else return false end

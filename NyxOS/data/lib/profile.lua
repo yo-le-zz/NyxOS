@@ -14,6 +14,7 @@ local profile = {}
 profile.list = {
     { id = "classic", name = "Classic", description = "Desktop with floating windows" },
     { id = "tablet", name = "Tablet / mini PC", description = "Small screens and touch: full-screen apps" },
+    { id = "turtle", name = "Turtle", description = "Text shell with the turtle toolkit (mining, farming, fleet)" },
     { id = "server", name = "Server", description = "Text console, services dashboard, no desktop" },
 }
 
@@ -26,6 +27,7 @@ end
 
 -- Best guess for this computer: pocket computers and small screens are tablets.
 function profile.detect()
+    if _G.turtle then return "turtle" end
     if _G.pocket then return "tablet" end
     local okS, w, h = pcall(term.getSize)
     if okS and w and (w < 40 or (h and h < 14)) then return "tablet" end
@@ -36,12 +38,13 @@ function profile.current()
     local cfg = config()
     local p = cfg.profile
     if cfg.uiMode == "server" then p = "server" end
-    if p == "classic" or p == "tablet" or p == "server" then return p end
+    if p == "classic" or p == "tablet" or p == "server" or p == "turtle" then return p end
     return profile.detect()
 end
 
 function profile.isTablet() return profile.current() == "tablet" end
 function profile.isServer() return profile.current() == "server" end
+function profile.isTurtle() return profile.current() == "turtle" end
 
 -- Which profile an app module is available in (module.profiles = { "classic" })
 function profile.appAllowed(mod, p)
@@ -53,11 +56,11 @@ end
 
 -- Table fields for /etc/nyx-config.lua
 function profile.fields(p)
-    return { profile = p, uiMode = (p == "server") and "server" or "desktop", gui = (p ~= "server") }
+    return { profile = p, uiMode = (p == "server") and "server" or (p == "turtle") and "text" or "desktop", gui = (p ~= "server" and p ~= "turtle") }
 end
 
 function profile.set(p)
-    if p ~= "classic" and p ~= "tablet" and p ~= "server" then return false, "unknown profile" end
+    if p ~= "classic" and p ~= "tablet" and p ~= "server" and p ~= "turtle" then return false, "unknown profile" end
     local nyxlib = dofile("/lib/nyxlib.lua")
     local cfg = nyxlib.loadTable("/etc/nyx-config.lua")
     for k, v in pairs(profile.fields(p)) do cfg[k] = v end
