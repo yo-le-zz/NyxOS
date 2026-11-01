@@ -63,8 +63,10 @@ local FILES = {
     "data/bin/nyxcert.lua",
     "data/bin/nyxupdate.lua",
     "data/bin/passwd.lua",
+    "data/bin/periph.lua",
     "data/bin/ping.lua",
     "data/bin/pkill.lua",
+    "data/bin/players.lua",
     "data/bin/printenv.lua",
     "data/bin/profile.lua",
     "data/bin/ps.lua",
@@ -78,6 +80,7 @@ local FILES = {
     "data/bin/resources.lua",
     "data/bin/rm.lua",
     "data/bin/run.lua",
+    "data/bin/say.lua",
     "data/bin/service.lua",
     "data/bin/shutdown.lua",
     "data/bin/sleep.lua",
@@ -107,6 +110,9 @@ local FILES = {
     "data/etc/lang/de.lua",
     "data/etc/lang/es.lua",
     "data/etc/lang/fr.lua",
+    "data/etc/lang/it.lua",
+    "data/etc/lang/nl.lua",
+    "data/etc/lang/pt.lua",
     "data/etc/motd",
     "data/etc/services/dhcpd.lua",
     "data/etc/services/dns.lua",
@@ -127,10 +133,12 @@ local FILES = {
     "data/lib/apps/notes.lua",
     "data/lib/apps/packages.lua",
     "data/lib/apps/paint.lua",
+    "data/lib/apps/peripherals.lua",
     "data/lib/apps/settings.lua",
     "data/lib/apps/snake.lua",
     "data/lib/apps/tasks.lua",
     "data/lib/apps/terminal.lua",
+    "data/lib/apps/tetris.lua",
     "data/lib/basalt.lua",
     "data/lib/canvas.lua",
     "data/lib/capture.lua",
@@ -155,6 +163,7 @@ local FILES = {
     "data/lib/nyxhttp.lua",
     "data/lib/nyxlib.lua",
     "data/lib/nyxscript.lua",
+    "data/lib/periph.lua",
     "data/lib/permissions.lua",
     "data/lib/procui.lua",
     "data/lib/profile.lua",
@@ -187,19 +196,123 @@ local function destination(relative)
     return "/" .. relative:gsub("^data/", "")
 end
 
+local args = { ... }
+local assumeYes, bootOnly = false, false
+for _, a in ipairs(args) do
+    if a == "--yes" or a == "-y" then assumeYes = true end
+    if a == "--boot" then bootOnly = true end
+end
+
+-- ---------------------------------------------------------------
+-- Boot repair: works even if /boot (NyxLoader) or /startup.lua was
+-- deleted, or the base folders are gone.
+-- ---------------------------------------------------------------
+local FALLBACK_STARTUP = [[
+-- Minimal fallback boot script written by NyxOS recovery.
+if fs.exists("/nyxos.lua") then
+    shell.run("/nyxos.lua")
+else
+    print("nyxos.lua not found: run recovery again.")
+end
+]]
+
+local function writeText(path, text)
+    local dir = fs.getDir(path)
+    if dir ~= "" and not fs.exists(dir) then fs.makeDir(dir) end
+    local f = fs.open(path, "w")
+    if not f then return false end
+    f.write(text) f.close()
+    return true
+end
+
+local function repairBoot()
+    print("")
+    print("-- Boot repair --")
+    -- 1. base folders
+    for _, dir in ipairs({ "/bin", "/lib", "/etc", "/etc/apt", "/etc/lang", "/home", "/tmp", "/var", "/var/log", "/var/apt", "/var/run", "/boot" }) do
+        if not fs.exists(dir) then
+            fs.makeDir(dir)
+            print("  recreated folder " .. dir)
+        end
+    end
+    -- 2. boot.json (NyxLoader reads it to list this OS)
+    if not fs.exists("/boot.json") then
+        writeText("/boot.json", '{"name":"NyxOS","version":"' .. (function()
+            local f = fs.exists("/etc/nyx-release") and fs.open("/etc/nyx-release", "r")
+            local v = "?"
+            if f then v = (f.readLine() or ""):match("NyxOS%s+(%S+)") or "?" f.close() end
+            return v
+        end)() .. '","author":"yo-le-zz","file":"nyxos.lua"}')
+        print("  recreated /boot.json")
+    end
+    -- 3. NyxLoader (/boot/nyxloader) and /startup.lua
+    local loaderOk = fs.exists("/boot/nyxloader/nyxloader.lua") and fs.exists("/boot/nyxloader/ui.lua")
+    local startupOk = fs.exists("/startup.lua")
+    if startupOk and not loaderOk then
+        local f = fs.open("/startup.lua", "r")
+        local text = f and f.readAll() or ""
+        if f then f.close() end
+        if text:find("/boot/nyxloader", 1, true) then startupOk = false end   -- points to the missing loader
+    end
+    if loaderOk and startupOk then
+        print("  NyxLoader and /startup.lua are fine.")
+    else
+        local installed = false
+        if http then
+            print("  NyxLoader is missing: downloading it...")
+            local r = http.get("https://raw.githubusercontent.com/yo-le-zz/NyxLoader/main/webinstall.lua")
+            if r then
+                local body = r.readAll() r.close()
+                writeText("/var/apt/nyxloader-webinstall.lua", body)
+                installed = shell.run("/var/apt/nyxloader-webinstall.lua", "--quiet") and fs.exists("/boot/nyxloader/nyxloader.lua")
+                fs.delete("/var/apt/nyxloader-webinstall.lua")
+            end
+        end
+        if installed then
+            print("  NyxLoader reinstalled.")
+        else
+            writeText("/startup.lua", FALLBACK_STARTUP)
+            print("  wrote a fallback /startup.lua (boots NyxOS directly).")
+        end
+    end
+    if fs.exists("/boot/nyxloader") and not fs.exists("/boot/config.lua") then
+        writeText("/boot/config.lua", 'return {\n    title = "NyxLoader",\n    timeout = 10,\n    bootColor = colors.blue,\n    secureBoot = false,\n    isolation = false,\n    lang = "en"\n}\n')
+        print("  recreated /boot/config.lua")
+    end
+    -- 4. default config if it vanished
+    if not fs.exists("/etc/nyx-config.lua") then
+        writeText("/etc/nyx-config.lua", textutils.serialize({ gui = true, lang = "en", profile = "classic", uiMode = "desktop" }))
+        print("  recreated /etc/nyx-config.lua")
+    end
+    if not fs.exists("/etc/passwd") then
+        print("  WARNING: /etc/passwd is missing: no user can log in. Use the recovery shell to run adduser.")
+    end
+end
+
+if bootOnly then
+    repairBoot()
+    print("")
+    print("Boot repair done. Reboot the computer: reboot")
+    return
+end
+
 if not http then
     print("recovery: the http API is not enabled on this computer.")
-    print("Use install.lua from a local copy of the NyxOS repo instead.")
+    print("Doing the offline part only (boot repair).")
+    repairBoot()
     return
 end
 
 print("=== NyxOS Recovery ===")
 print("This re-downloads system files (/bin, /lib, /nyxos.lua) from")
-print("github.com/yo-le-zz/NyxOS. Users, config and /home are untouched.")
-write("Continue? (y/n): ")
-if read() ~= "y" then
-    print("Cancelled.")
-    return
+print("github.com/yo-le-zz/NyxOS and repairs the boot files (/boot, /startup.lua,")
+print("boot.json). Users, config and /home are untouched.")
+if not assumeYes then
+    write("Continue? (y/n): ")
+    if read() ~= "y" then
+        print("Cancelled.")
+        return
+    end
 end
 
 local ok, failed = 0, 0
@@ -230,6 +343,8 @@ for _, relative in ipairs(FILES) do
         print("  FAILED   " .. destPath .. " (" .. tostring(err or "empty response") .. ")")
     end
 end
+
+repairBoot()
 
 print("")
 print("Recovery done: " .. ok .. " file(s) repaired, " .. failed .. " failed.")

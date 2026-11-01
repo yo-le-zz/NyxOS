@@ -1418,30 +1418,48 @@ end
 -- were started from it (package launch, "Exit to shell"...).
 ------------------------------------------------------------------
 function desktop.run()
+    local crashes = 0
     while true do
         local ok, err, request = runOnce()
         if not ok then
-            print("Error while starting the desktop: " .. tostring(err))
-            print("Details: logs -e")
-            return false
-        end
-        if request and request.command then
-            term.setBackgroundColor(palette.black)
-            term.setTextColor(palette.white)
-            term.clear()
-            term.setCursorPos(1, 1)
-            local okRun = pcall(shell.run, request.command)
-            if request.command ~= "shell" and request.command ~= "reboot" and request.command ~= "shutdown" then
+            crashes = crashes + 1
+            logger.error("desktop", "desktop crashed (" .. crashes .. "/3)")
+            if crashes >= 3 then
+                term.setBackgroundColor(palette.black)
+                term.setTextColor(palette.white)
+                term.clear()
+                term.setCursorPos(1, 1)
+                print("The desktop crashed 3 times and was stopped.")
                 print("")
-                print("Press any key to return to the desktop...")
+                print(tostring(err):match("^[^\n]*"))
+                print("")
+                print("Full details: logs -e   (or /var/log/crash.log)")
+                print("Press any key to continue in the shell...")
                 os.pullEvent("key")
+                return false
             end
-            if not okRun then
-                print("The program stopped with an error.")
-                sleep(1)
+            -- the desktop restarts by itself: one crashing event must not end the session
+            sleep(0.5)
+        else
+            crashes = 0
+            if request and request.command then
+                term.setBackgroundColor(palette.black)
+                term.setTextColor(palette.white)
+                term.clear()
+                term.setCursorPos(1, 1)
+                local okRun = pcall(shell.run, request.command)
+                if request.command ~= "shell" and request.command ~= "reboot" and request.command ~= "shutdown" then
+                    print("")
+                    print("Press any key to return to the desktop...")
+                    os.pullEvent("key")
+                end
+                if not okRun then
+                    print("The program stopped with an error.")
+                    sleep(1)
+                end
+            elseif not (request and request.restart) then
+                return true
             end
-        elseif not (request and request.restart) then
-            return true
         end
     end
 end

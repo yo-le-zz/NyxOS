@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.0
+
+### Added
+- Peripheral compatibility: `lib/periph.lua` catalogues CC:Tweaked, **Advanced Peripherals** (chat box, player detector, environment/energy detector, inventory manager, redstone integrator, block reader, geo scanner, ME/RS bridge, colony integrator, NBT storage, AR controller) and **Classic Peripherals** (cryptographic accelerator, tape drive, NFC reader, radio tower; unknown types are listed too). Commands `periph`, `players`, `say`; Peripherals app; peripherals line in `specs`.
+- Language packs: Italiano, Portugues, Nederlands (154 core strings each; the rest falls back to English).
+- Apps: Tetris, Peripherals.
+- Recovery repairs the boot files even when `/boot` (NyxLoader), `/startup.lua`, `boot.json` or the base folders are deleted: `recovery --boot` (offline part) and `webinstall repair` (works when `/bin` is gone too).
+- Desktop crash guard: the desktop restarts itself (up to 3 times), the last crash is kept whole in `/var/log/crash.log`.
+
+### Changed
+- Installer start is minimal: a static logo and version, no globe animation and no loading bar before the questions (one progress bar remains while files are copied).
+
 ## 2.0.0
 
 ### Added (turtles, part 1)

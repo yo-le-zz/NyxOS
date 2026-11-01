@@ -70,44 +70,20 @@ local GRADIENT = { palette.blue, palette.cyan, palette.lightBlue, palette.white 
 -- Animated logo: it is drawn column by column with a colour wave, then
 -- a loading bar fills under it.
 function ui.splash(version)
+    -- Minimal start: the logo and the version, no loading bar.
     local w, h = size()
     clear()
-    local g = globeSource(w, h)
-    if g then
-        for n = 0, 24 do
-            local ok, rows = pcall(g.frame, n * 1.5)
-            if not ok then break end
-            blitFrame(rows, 1, 1)
-            pause(0.05)
-        end
-        clear()
-    end
     local lw = #LOGO[1]
     local x0 = math.max(1, math.floor((w - lw) / 2) + 1)
-    local y0 = math.max(1, math.floor(h / 2) - 5)
-    for col = 1, lw + 3, 2 do
-        for row, line in ipairs(LOGO) do
-            for c = math.max(1, col - 3), math.min(lw, col + 1) do
-                local ch = line:sub(c, c)
-                if ch ~= " " then
-                    local age = col + 1 - c
-                    local colour = GRADIENT[math.max(1, math.min(#GRADIENT, age + 1))]
-                    put(x0 + c - 1, y0 + row - 1, ch, colour, palette.black)
-                end
-            end
+    local y0 = math.max(1, math.floor(h / 2) - 4)
+    for row, line in ipairs(LOGO) do
+        for c = 1, lw do
+            local ch = line:sub(c, c)
+            if ch ~= " " then put(x0 + c - 1, y0 + row - 1, ch, palette.cyan, palette.black) end
         end
-        pause(0.03)
     end
     center(y0 + #LOGO + 1, "Version " .. tostring(version), palette.lightGray, palette.black)
-    local bw = math.min(30, w - 4)
-    local bx = math.floor((w - bw) / 2) + 1
-    local by = y0 + #LOGO + 3
-    put(bx, by, string.rep(" ", bw), palette.white, palette.gray)
-    for i = 1, bw do
-        put(bx, by, string.rep(" ", i), palette.white, palette.cyan)
-        pause(0.02)
-    end
-    pause(0.2)
+    pause(0.4)
 end
 
 local function readLangs(dataDir)

@@ -94,6 +94,10 @@ function specs.collect()
     local accel = safe(function() return peripheral.find("cryptographic_accelerator") end)
     add("Crypto accel.", accel and "yes" or "no")
 
+    -- Peripherals (CC:Tweaked, Advanced Peripherals, Classic Peripherals)
+    local ps = safe(function() return dofile("/lib/periph.lua").summary() end, {})
+    if #ps > 0 then add("Peripherals", table.concat(ps, ", ")) end
+
     -- Time
     add("Uptime (CC)", fmtDuration(safe(os.clock, 0)))
     add("Time", safe(function() return os.date("%d/%m/%Y %H:%M:%S") end, "?"))

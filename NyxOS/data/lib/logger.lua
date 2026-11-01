@@ -64,6 +64,15 @@ function logger.error(tag, message) logger.log(tag, "error", message) end
 -- Logs a (possibly multi-line) error with its traceback when available.
 function logger.crash(tag, err)
     local text = tostring(err)
+    -- the last crash is also kept whole in /var/log/crash.log (easy to read / send)
+    pcall(function()
+        ensureDir()
+        local f = fs.open("/var/log/crash.log", "w")
+        if f then
+            f.write(os.date("%Y-%m-%d %H:%M:%S") .. "  [" .. tostring(tag) .. "]\n" .. text .. "\n")
+            f.close()
+        end
+    end)
     for line in (text .. "\n"):gmatch("([^\n]*)\n") do
         if line ~= "" then logger.log(tag, "error", line) end
     end

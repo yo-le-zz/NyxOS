@@ -7,13 +7,26 @@
 -- boot.json is NOT downloaded: install.lua generates it on the target
 -- itself (writeBootJson), so there is no such file in the repository.
 
-local VERSION = "2.0.0"
+local VERSION = "2.1.0"
 -- Optional arguments: webinstall [owner/name [branch-or-tag]]  (used by nyxupdate)
 local args = { ... }
 local repo = (args[1] and args[1]:match("^[%w%-%._]+/[%w%-%._]+$")) or "yo-le-zz/NyxOS"
 local ref = (args[2] and args[2]:match("^[%w%-%._/]+$")) or "main"
 local REPO_BASE = "https://raw.githubusercontent.com/" .. repo .. "/" .. ref .. "/NyxOS"
 local palette = colors or colours
+
+-- `webinstall repair` : works even when /bin and /boot are gone. Downloads
+-- bin/recovery.lua and runs it (system files + boot repair, no questions).
+if args[1] == "repair" then
+    if not http then print("repair: the http API is not enabled.") return end
+    local r = http.get("https://raw.githubusercontent.com/yo-le-zz/NyxOS/main/NyxOS/data/bin/recovery.lua")
+    if not r then print("repair: cannot download recovery.lua") return end
+    local body = r.readAll() r.close()
+    if not fs.exists("/bin") then fs.makeDir("/bin") end
+    local f = fs.open("/bin/recovery.lua", "w") f.write(body) f.close()
+    shell.run("/bin/recovery.lua", "--yes")
+    return
+end
 
 -- Files to download (relative to NyxOS/)
 local FILES = {
@@ -65,8 +78,10 @@ local FILES = {
     "data/bin/nyxcert.lua",
     "data/bin/nyxupdate.lua",
     "data/bin/passwd.lua",
+    "data/bin/periph.lua",
     "data/bin/ping.lua",
     "data/bin/pkill.lua",
+    "data/bin/players.lua",
     "data/bin/printenv.lua",
     "data/bin/profile.lua",
     "data/bin/ps.lua",
@@ -80,6 +95,7 @@ local FILES = {
     "data/bin/resources.lua",
     "data/bin/rm.lua",
     "data/bin/run.lua",
+    "data/bin/say.lua",
     "data/bin/service.lua",
     "data/bin/shutdown.lua",
     "data/bin/sleep.lua",
@@ -109,6 +125,9 @@ local FILES = {
     "data/etc/lang/de.lua",
     "data/etc/lang/es.lua",
     "data/etc/lang/fr.lua",
+    "data/etc/lang/it.lua",
+    "data/etc/lang/nl.lua",
+    "data/etc/lang/pt.lua",
     "data/etc/motd",
     "data/etc/services/dhcpd.lua",
     "data/etc/services/dns.lua",
@@ -129,10 +148,12 @@ local FILES = {
     "data/lib/apps/notes.lua",
     "data/lib/apps/packages.lua",
     "data/lib/apps/paint.lua",
+    "data/lib/apps/peripherals.lua",
     "data/lib/apps/settings.lua",
     "data/lib/apps/snake.lua",
     "data/lib/apps/tasks.lua",
     "data/lib/apps/terminal.lua",
+    "data/lib/apps/tetris.lua",
     "data/lib/basalt.lua",
     "data/lib/canvas.lua",
     "data/lib/capture.lua",
@@ -157,6 +178,7 @@ local FILES = {
     "data/lib/nyxhttp.lua",
     "data/lib/nyxlib.lua",
     "data/lib/nyxscript.lua",
+    "data/lib/periph.lua",
     "data/lib/permissions.lua",
     "data/lib/procui.lua",
     "data/lib/profile.lua",
