@@ -18,7 +18,7 @@
     matches, a minimal meta stub is sent so the server can still queue it.
 ]]
 
-local receiver = require("client_lib.receiver")
+local receiver = require("lib.receiver")
 
 local M = {}
 

@@ -7,7 +7,7 @@
 -- boot.json is NOT downloaded: install.lua generates it on the target
 -- itself (writeBootJson), so there is no such file in the repository.
 
-local VERSION = "1.7.0"
+local VERSION = "1.7.1"
 -- Optional arguments: webinstall [owner/name [branch-or-tag]]  (used by nyxupdate)
 local args = { ... }
 local repo = (args[1] and args[1]:match("^[%w%-%._]+/[%w%-%._]+$")) or "yo-le-zz/NyxOS"

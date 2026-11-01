@@ -5,9 +5,9 @@
 
 local dfpwm = require("cc.audio.dfpwm")
 
-local network = require("server_lib.network")
-local chat = require('server_lib.chat')
-local library = require('server_lib.library')
+local network = require("lib.network")
+local chat = require('lib.chat')
+local library = require('lib.library')
 
 local AUDIO_CHUNK_SEC = 2.70 -- maximum tick multiple under 2.730666.. [(2^7 * 2^10) samples / 48000kHz]
 local TICK = 0.050

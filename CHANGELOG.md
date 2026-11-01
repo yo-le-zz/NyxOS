@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.1
+
+### Fixed
+- Redionet client/server: modules were required as `client_lib.*` / `server_lib.*` (not found) -> `lib.*` (Redionet 1.1.3).
+- Double boot-choice screen: NyxLoader 1.1.1 now boots directly when only one OS is installed (any key within 2 s opens its menu); the NyxOS boot menu stays.
+
 ## 1.7.0
 
 ### Added

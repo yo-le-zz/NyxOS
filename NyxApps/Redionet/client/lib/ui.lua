@@ -3,9 +3,9 @@
     Handles all screen drawing and user input.
 ]]
 
-local net = require("client_lib.net")
-local receiver = require("client_lib.receiver")
-local library = require("client_lib.library")
+local net = require("lib.net")
+local receiver = require("lib.receiver")
+local library = require("lib.library")
 
 local M = {}
 
