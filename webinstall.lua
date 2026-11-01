@@ -7,7 +7,7 @@
 -- boot.json is NOT downloaded: install.lua generates it on the target
 -- itself (writeBootJson), so there is no such file in the repository.
 
-local VERSION = "1.8.0"
+local VERSION = "1.9.0"
 -- Optional arguments: webinstall [owner/name [branch-or-tag]]  (used by nyxupdate)
 local args = { ... }
 local repo = (args[1] and args[1]:match("^[%w%-%._]+/[%w%-%._]+$")) or "yo-le-zz/NyxOS"
@@ -46,6 +46,7 @@ local FILES = {
     "data/bin/hosts.lua",
     "data/bin/ifconfig.lua",
     "data/bin/interpreters.lua",
+    "data/bin/ipc.lua",
     "data/bin/jobs.lua",
     "data/bin/kill.lua",
     "data/bin/killall.lua",
@@ -58,6 +59,7 @@ local FILES = {
     "data/bin/net.lua",
     "data/bin/netstat.lua",
     "data/bin/newterm.lua",
+    "data/bin/nice.lua",
     "data/bin/nslookup.lua",
     "data/bin/nyx.lua",
     "data/bin/nyxcert.lua",
@@ -71,6 +73,7 @@ local FILES = {
     "data/bin/pwd.lua",
     "data/bin/reboot.lua",
     "data/bin/recovery.lua",
+    "data/bin/renice.lua",
     "data/bin/reset.lua",
     "data/bin/resources.lua",
     "data/bin/rm.lua",
@@ -134,6 +137,7 @@ local FILES = {
     "data/lib/icon.lua",
     "data/lib/installui.lua",
     "data/lib/interpreters.lua",
+    "data/lib/ipc.lua",
     "data/lib/logger.lua",
     "data/lib/login.lua",
     "data/lib/machineid.lua",

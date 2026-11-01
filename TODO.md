@@ -104,13 +104,14 @@ Chaque version fait l'objet d'un zip livré séparément.
 - [x] Packages `python` et `c` : squelettes (`print` / `printf` de littéraux)
 - [ ] Vrais interpréteurs (Python / C) — plus tard
 
-## 1.9.0 — Robustesse et finitions
-- [ ] Installation sur disque : réécriture des chemins sous NyxLoader (limite connue)
-- [ ] Priorités de processus, `nice`, limites de ressources
-- [ ] IPC simple entre processus (files de messages)
+## 1.9.0 — Robustesse et finitions ✅ (livrée, sauf mention)
+- [ ] Installation sur disque : réécriture des chemins sous NyxLoader (limite connue, reportée)
+- [x] Priorités de processus : `nice`, `renice`, ordre de reprise du planificateur
+- [x] Limites de ressources : `nice -l N` (arrêt après N réveils)
+- [x] IPC simple (files de messages) : `lib/ipc.lua`, `ipc`, `nyxapi.ipc`
 - [x] Mode serveur sans interface (`guimode server`) : services + shell texte
-- [ ] Tests automatisés (simulateur CC:Tweaked) dans le dépôt
-- [ ] Documentation complète (`docs/`) pour chaque sous-système
+- [x] Tests automatisés (simulateur CC:Tweaked) dans le dépôt : `tests/`
+- [ ] Documentation complète (`docs/`) pour chaque sous-système (début : INTERPRETERS.md)
 
 ---
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.0
+
+### Added
+- Process priorities: `nice [-n N] [-l MAXWAKEUPS] cmd`, `renice N pid` (scheduler resumes lower values first; negative = administrator). `ps` data now carries `nice`.
+- Resource limit: a job is killed after a given number of wake-ups.
+- IPC message queues: `/lib/ipc.lua`, `ipc` command, `nyxapi.ipc`.
+- `tests/`: the CC:Tweaked simulator and scenarios, `tests/run_all.sh`.
+
 ## 1.8.0
 
 ### Added

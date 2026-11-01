@@ -288,6 +288,7 @@ function services.spawn(opts)
     local session = nyxlib.loadSession()
     return addThread(s, {
         name = label, kind = "job", cmd = opts.cmd or label,
+        nice = tonumber(opts.nice) or 0, maxResumes = tonumber(opts.maxResumes),
         user = opts.user or session.username or "root",
         win = ok and win or nil,
         co = coroutine.create(function()
@@ -301,6 +302,17 @@ function services.spawn(opts)
             end
         end),
     })
+end
+
+-- Priority (-20..19, lower = resumed first). Returns ok, err.
+function services.setNice(pid, value)
+    local s = sched()
+    if not s then return false, "The scheduler is not running." end
+    value = math.max(-20, math.min(19, math.floor(tonumber(value) or 0)))
+    for _, t in ipairs(s.threads) do
+        if t.pid == pid and not t.killed then t.nice = value return true end
+    end
+    return false, "No such process: " .. tostring(pid)
 end
 
 -- Registers a listing-only entry (a part of the system that is not a
@@ -326,7 +338,7 @@ function services.processes()
         table.insert(list, {
             pid = t.pid, name = t.name, kind = t.kind, user = t.user or "root",
             state = coroutine.status(t.co) == "dead" and "dead" or "running",
-            started = t.started, resumes = t.resumes, cmd = t.cmd, description = t.description,
+            started = t.started, resumes = t.resumes, nice = t.nice or 0, cmd = t.cmd, description = t.description,
             killable = not t.isShell,
         })
       end
@@ -426,11 +438,20 @@ function services.runWithShell(shellFn)
 
     local function resumeAll(...)
         local evName = (select(1, ...))
-        for i = #s.threads, 1, -1 do
-            local t = s.threads[i]
+        -- Priority: threads with a lower `nice` value (-20..19, default 0)
+        -- are resumed first; same nice keeps the historical order.
+        local order = {}
+        for i = #s.threads, 1, -1 do order[#order + 1] = { t = s.threads[i], pos = #order } end
+        table.sort(order, function(a, b)
+            local na, nb = a.t.nice or 0, b.t.nice or 0
+            if na ~= nb then return na < nb end
+            return a.pos < b.pos
+        end)
+        for _, slot in ipairs(order) do
+            local t = slot.t
             if t then
                 if t.killed or coroutine.status(t.co) == "dead" then
-                    table.remove(s.threads, i)
+                    for j = #s.threads, 1, -1 do if s.threads[j] == t then table.remove(s.threads, j) break end end
                 elseif evName == "terminate" and not t.isShell then
                     -- Ctrl+T ends the foreground program, not background work.
                 elseif t.filter == nil or t.filter == evName then
@@ -439,6 +460,10 @@ function services.runWithShell(shellFn)
                     t.resumes = t.resumes + 1
                     local ok, result = coroutine.resume(t.co, ...)
                     if prev then term.redirect(prev) end
+                    if ok and t.maxResumes and t.resumes > t.maxResumes then
+                        t.killed = true
+                        logger.log("service", "warn", tostring(t.name) .. " killed: resource limit (" .. t.maxResumes .. " wake-ups)")
+                    end
                     if not ok then
                         if t.isShell then
                             error(result, 0)
