@@ -1,0 +1,32 @@
+{
+    "name": "python",
+    "version": "0.1.0",
+    "description": "Python interpreter (skeleton: print of string literals).",
+    "author": "yo-le-zz",
+    "type": [
+        "client"
+    ],
+    "client": {
+        "entry": "python.lua",
+        "installer": "install.lua",
+        "uninstaller": "uninstall.lua",
+        "icon": {
+            "palette": {
+                "k": "black",
+                "c": "yellow",
+                "w": "white"
+            },
+            "pixels": [
+                "................",
+                ".cccccccccccccc.",
+                ".cwwwwwwwwwwwwc.",
+                ".cwkwwkkkwwwwwc.",
+                ".cwkwwkwkwwwwwc.",
+                ".cwkkkkkkwwwwwc.",
+                ".cwwwwwwwwwwwwc.",
+                ".cccccccccccccc.",
+                "................"
+            ]
+        }
+    }
+}

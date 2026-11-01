@@ -96,14 +96,13 @@ Chaque version fait l'objet d'un zip livré séparément.
 - [x] Redionet : client corrigé (1.1.2)
 - [x] NyxLoader 1.1.0 (ASCII, redémarrage auto, installateur NyxOS)
 
-## 1.8.0 — Langages externes (Python, C)
-- [ ] Registre d'interpréteurs `/etc/interpreters.lua` (`.py` → package python,
-      `.c` → package c)
-- [ ] Hook shell : `python main.py` / `c main.c` → interpréteur du package
-- [ ] API `nyxapi.registerInterpreter(name, ext, program)` pour les packages
-- [ ] Spécification (docs/) de l'interface qu'un interpréteur doit fournir :
-      parse → exécution → traduction des appels système vers l'API NyxOS
-- [ ] Packages `python` et `c` : squelettes (le vrai interpréteur viendra plus tard)
+## 1.8.0 — Langages externes (Python, C) ✅ (livrée : squelettes)
+- [x] Registre d'interpréteurs `/etc/interpreters.lua` (`lib/interpreters.lua`)
+- [x] Commandes `run <fichier>` et `interpreters [add|remove]`
+- [x] API `nyxapi.registerInterpreter(name, ext, program)`
+- [x] Spécification : `docs/INTERPRETERS.md`
+- [x] Packages `python` et `c` : squelettes (`print` / `printf` de littéraux)
+- [ ] Vrais interpréteurs (Python / C) — plus tard
 
 ## 1.9.0 — Robustesse et finitions
 - [ ] Installation sur disque : réécriture des chemins sous NyxLoader (limite connue)

@@ -138,6 +138,8 @@ local pages = {
     nyxcert = { "nyxcert create|export|import|list|remove ...", "Certificates for https on the NyxOS network (shared secret, no CA). create <host> on the server, export <host> <file>, import <file> on the clients." },
     httpd = { "service enable httpd", "Web server service: serves /var/www on port 80 (and 443 when /etc/ssl/<host>.key exists). Config: /etc/services/httpd.lua." },
     profile = { "profile [classic|tablet|server]", "Shows or sets the machine profile (UI and menus adapt). Takes effect after restarting the desktop." },
+    run = { "run <file> [args]", "Runs a script with the interpreter registered for its extension (.py, .c ... see interpreters)." },
+    interpreters = { "interpreters [add <name> <ext> <program>|remove <name>]", "Lists or manages registered language interpreters." },
     export = { "export [-p|-g] NAME=value", "Sets an environment variable ($NAME or ${NAME} in commands and .nyx scripts). -p saves it in ~/.profile, -g in /etc/environment (administrator). Without arguments: lists them." },
     unset = { "unset [-p] NAME ...", "Removes environment variables (-p: also from ~/.profile)." },
     env = { "env [NAME|reload]", "Lists the environment (or prints one variable). printenv is the same command." },

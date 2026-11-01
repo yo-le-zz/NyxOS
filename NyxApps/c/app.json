@@ -1,0 +1,32 @@
+{
+    "name": "c",
+    "version": "0.1.0",
+    "description": "C interpreter (skeleton: printf of string literals).",
+    "author": "yo-le-zz",
+    "type": [
+        "client"
+    ],
+    "client": {
+        "entry": "c.lua",
+        "installer": "install.lua",
+        "uninstaller": "uninstall.lua",
+        "icon": {
+            "palette": {
+                "k": "black",
+                "c": "blue",
+                "w": "white"
+            },
+            "pixels": [
+                "................",
+                ".cccccccccccccc.",
+                ".cwwwwwwwwwwwwc.",
+                ".cwkwwkkkwwwwwc.",
+                ".cwkwwkwkwwwwwc.",
+                ".cwkkkkkkwwwwwc.",
+                ".cwwwwwwwwwwwwc.",
+                ".cccccccccccccc.",
+                "................"
+            ]
+        }
+    }
+}

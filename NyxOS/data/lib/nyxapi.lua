@@ -14,7 +14,7 @@
 
 local nyxapi = {}
 
-nyxapi.VERSION = "1.7.1"
+nyxapi.VERSION = "1.8.0"
 
 local function lazy(path)
     local loaded = nil
@@ -46,6 +46,12 @@ nyxapi.machine = lazy("/lib/machineid.lua")
 nyxapi.theme = lazy("/lib/theme.lua")
 nyxapi.display = lazy("/lib/display.lua")
 nyxapi.crypto = lazy("/lib/crypto.lua")
+nyxapi.interpreters = lazy("/lib/interpreters.lua")
+
+-- Lets a package declare an interpreter: nyxapi.registerInterpreter("python", "py", "/lib/interp/python.lua")
+function nyxapi.registerInterpreter(name, ext, program)
+    return nyxapi.interpreters.register(name, ext, program)
+end
 
 -- Convenience: current session (whoever is logged in right now).
 function nyxapi.session()

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.0
+
+### Added
+- Interpreter registry (`/etc/interpreters.lua`, `lib/interpreters.lua`), `run <file>` and `interpreters` commands, `nyxapi.registerInterpreter`.
+- `docs/INTERPRETERS.md`: the contract an interpreter package must follow.
+- Skeleton `python` and `c` packages (NyxApps): only print/printf of string literals, to prove the pipeline.
+
 ## 1.7.1
 
 ### Fixed

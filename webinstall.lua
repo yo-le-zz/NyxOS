@@ -7,7 +7,7 @@
 -- boot.json is NOT downloaded: install.lua generates it on the target
 -- itself (writeBootJson), so there is no such file in the repository.
 
-local VERSION = "1.7.1"
+local VERSION = "1.8.0"
 -- Optional arguments: webinstall [owner/name [branch-or-tag]]  (used by nyxupdate)
 local args = { ... }
 local repo = (args[1] and args[1]:match("^[%w%-%._]+/[%w%-%._]+$")) or "yo-le-zz/NyxOS"
@@ -45,6 +45,7 @@ local FILES = {
     "data/bin/hostname.lua",
     "data/bin/hosts.lua",
     "data/bin/ifconfig.lua",
+    "data/bin/interpreters.lua",
     "data/bin/jobs.lua",
     "data/bin/kill.lua",
     "data/bin/killall.lua",
@@ -73,6 +74,7 @@ local FILES = {
     "data/bin/reset.lua",
     "data/bin/resources.lua",
     "data/bin/rm.lua",
+    "data/bin/run.lua",
     "data/bin/service.lua",
     "data/bin/shutdown.lua",
     "data/bin/sleep.lua",
@@ -131,6 +133,7 @@ local FILES = {
     "data/lib/i18n.lua",
     "data/lib/icon.lua",
     "data/lib/installui.lua",
+    "data/lib/interpreters.lua",
     "data/lib/logger.lua",
     "data/lib/login.lua",
     "data/lib/machineid.lua",
